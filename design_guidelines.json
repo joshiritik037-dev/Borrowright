@@ -1,0 +1,228 @@
+{
+  "app_name": "BorrowRight",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "A personal financial advisor in your pocket — premium, trustworthy, calm, and transparent.",
+  "color": {
+    "light": {
+      "surface": "#FAFAFA",
+      "onSurface": "#1A1D1C",
+      "surfaceSecondary": "#FFFFFF",
+      "onSurfaceSecondary": "#1A1D1C",
+      "surfaceTertiary": "#F0F2F1",
+      "onSurfaceTertiary": "#4A4D4C",
+      "surfaceInverse": "#121413",
+      "onSurfaceInverse": "#FFFFFF",
+      "brand": "#0A3B2A",
+      "brandPrimary": "#0A3B2A",
+      "onBrandPrimary": "#FFFFFF",
+      "brandSecondary": "#155D44",
+      "onBrandSecondary": "#FFFFFF",
+      "brandTertiary": "#E6EFEA",
+      "onBrandTertiary": "#0A3B2A",
+      "success": "#059669",
+      "onSuccess": "#FFFFFF",
+      "warning": "#D4AF37",
+      "onWarning": "#423200",
+      "error": "#DC2626",
+      "onError": "#FFFFFF",
+      "info": "#0F4C81",
+      "onInfo": "#FFFFFF",
+      "border": "#E5E7EB",
+      "borderStrong": "#9CA3AF",
+      "divider": "#F3F4F6"
+    },
+    "dark": {
+      "surface": "#0F1110",
+      "onSurface": "#F8FAFC",
+      "surfaceSecondary": "#161918",
+      "onSurfaceSecondary": "#F8FAFC",
+      "surfaceTertiary": "#202422",
+      "onSurfaceTertiary": "#9CA3AF",
+      "surfaceInverse": "#FFFFFF",
+      "onSurfaceInverse": "#1A1D1C",
+      "brand": "#155D44",
+      "brandPrimary": "#155D44",
+      "onBrandPrimary": "#FFFFFF",
+      "brandSecondary": "#1E7D5D",
+      "onBrandSecondary": "#FFFFFF",
+      "brandTertiary": "#1A2C25",
+      "onBrandTertiary": "#4ADE80",
+      "success": "#10B981",
+      "onSuccess": "#000000",
+      "warning": "#FBBF24",
+      "onWarning": "#423200",
+      "error": "#EF4444",
+      "onError": "#000000",
+      "info": "#3B82F6",
+      "onInfo": "#FFFFFF",
+      "border": "#2D3331",
+      "borderStrong": "#4B5552",
+      "divider": "#1E2421"
+    }
+  },
+  "typography": {
+    "displayFontFamily": "Geist",
+    "textFontFamily": "Geist",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous iOS-native vertical spacing. Padding creates clear breathing room around forms and financial data.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": 1,
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use frosted glass on the '15% Cash Refund' hero banner",
+      "Use glass headers over scrolling dashboard content",
+      "Bottom tab bar over content",
+      "Bottom-sheet headers"
+    ],
+    "dont's": [
+      "No glass on form inputs",
+      "No glass on standard loan type cards"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Welcome",
+      "purpose": "Introduce BorrowRight benefits and guide to Auth.",
+      "layout": "Full bleed 'welcome_bg' abstract background. Vertical gradient scrim from transparent to surfaceInverse. 2x2 grid of feature cards (Compare Banks, Lower Cost, Fast Process, Dedicated RM) placed over the scrim. Large sticky 'Get Started' button fixed at safe-area bottom.",
+      "states": {
+        "loading": "Centered brand spinner",
+        "empty": "N/A",
+        "error": "N/A"
+      }
+    },
+    {
+      "name": "Auth (OTP)",
+      "purpose": "Securely log the user in via Mobile OTP or Google.",
+      "layout": "Large minimal typography. Huge input area for 10-digit mobile. Large 4-box OTP input. Sticky 'Continue' button bound to KeyboardAvoidingView. Minimalist 'Google Login' secondary button.",
+      "states": {
+        "loading": "Button shows spinner",
+        "empty": "N/A",
+        "error": "Inline red text above CTA"
+      }
+    },
+    {
+      "name": "KYC Onboarding",
+      "purpose": "Gather personal and financial profile.",
+      "layout": "Progress bar at top (e.g., Step 1 of 3). Clean, single-column stacked input fields (Name, PAN, Aadhaar, Income). Sticky Continue button at the bottom.",
+      "states": {
+        "loading": "Skeleton of form fields",
+        "empty": "N/A",
+        "error": "Error toast with retry"
+      }
+    },
+    {
+      "name": "Dashboard",
+      "purpose": "Central hub for loan tracking, RM contact, and quick actions.",
+      "layout": "Glass header with Profile and Notification icons. Top hero banner: 15% Cash Refund using 'cash_refund_bg' + glass overlay + warning (Gold) accent. Next: 'Track Application' horizontal pipeline card. Next: 2x2 or horizontal scroll 'Loan Types' with brandTertiary tinted Phosphor icons. Next: 'Relationship Manager' contact card with 'rm_avatar'. Next: EMI Calculator mini-widget.",
+      "states": {
+        "loading": "Card skeletons with shimmer",
+        "empty": "N/A",
+        "error": "Failed to load dashboard data + Retry"
+      }
+    },
+    {
+      "name": "Loan Tracker",
+      "purpose": "Visualize the 8-stage pipeline.",
+      "layout": "Clean vertical stepper. Active step has brandPrimary filled dot, brandPrimary bold text. Future steps have surfaceTertiary dot. A continuous vertical gray line connects them. Each step shows timestamp if completed.",
+      "states": {
+        "loading": "Stepper skeleton",
+        "empty": "No active application - Prompt to apply",
+        "error": "Could not fetch status"
+      }
+    },
+    {
+      "name": "Bank Comparison",
+      "purpose": "Compare bank rates side-by-side.",
+      "layout": "Horizontal snap-scrolling cards. Each card has Bank Name/Logo (initials fallback), Interest Rate, EMI. One card highlighted with a 'Best Value' top badge and brandPrimary borderStrong.",
+      "states": {
+        "loading": "Horizontal card skeletons",
+        "empty": "No banks match criteria",
+        "error": "Error fetching rates"
+      }
+    },
+    {
+      "name": "Document Upload",
+      "purpose": "Securely upload KYC and property docs.",
+      "layout": "Header lock icon. 1-2 large dashed dropzones for PAN/Aadhaar. A massive brandPrimary sticky CTA for 'Submit'. Also, a distinct full-width 'WhatsApp Document Submission' secondary card using the 'whatsapp_icon' PNG.",
+      "states": {
+        "loading": "Uploading spinner over document row",
+        "empty": "No docs uploaded yet",
+        "error": "Upload failed red badge"
+      }
+    }
+  ],
+  "images": {
+    "welcome_bg": {
+      "url": "https://images.unsplash.com/photo-1716962659532-f17a565e24a1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBhYnN0cmFjdCUyMGNsZWFuJTIwZ2VvbWV0cmljJTIwYmFja2dyb3VuZCUyMGxpZ2h0JTIwc2FuZCUyMHdoaXRlfGVufDB8fHx8MTc4MjU3NzExMXww&ixlib=rb-4.1.0&q=85",
+      "dark": "https://images.unsplash.com/photo-1649861742672-20152f77c1f5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzV8MHwxfHNlYXJjaHwxfHxkYXJrJTIwZ3JlZW4lMjBsdXh1cnklMjBhYnN0cmFjdCUyMGdyYWRpZW50JTIwdGV4dHVyZSUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzgyNTc3MTExfDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Clean premium background texture"
+    },
+    "cash_refund_bg": {
+      "url": "https://images.unsplash.com/photo-1649861742672-20152f77c1f5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzV8MHwxfHNlYXJjaHwxfHxkYXJrJTIwZ3JlZW4lMjBsdXh1cnklMjBhYnN0cmFjdCUyMGdyYWRpZW50JTIwdGV4dHVyZSUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzgyNTc3MTExfDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Dark green premium gradient background for the cash refund banner"
+    },
+    "rm_avatar": {
+      "url": "https://images.unsplash.com/photo-1580489944761-15a19d654956?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwxfHxwcmVtaXVtJTIwcHJvZmVzc2lvbmFsJTIwYnVzaW5lc3MlMjB3b21hbiUyMGhlYWRzaG90JTIwc21pbGluZyUyMGNsZWFyJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3ODI1NzcxMTF8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Professional dedicated relationship manager smiling"
+    },
+    "whatsapp_icon": {
+      "url": "https://images.unsplash.com/photo-1633354931133-27ac1ee5d853?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njd8MHwxfHNlYXJjaHwxfHxncmVlbiUyMHdoYXRzYXBwJTIwYXBwJTIwaWNvbiUyMGxvZ28lMjBpc29sYXRlZHxlbnwwfHx8fDE3ODI1NzcxMTh8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Green WhatsApp 3D icon for document submission"
+    },
+    "hdfc_bank_logo": {
+      "url": "Initials Fallback: HDFC. Query ran: 'hdfc bank logo transparent png' returned non-usable building images.",
+      "alt": "HDFC Bank Logo"
+    },
+    "sbi_bank_logo": {
+      "url": "Initials Fallback: SBI. Query ran: 'sbi state bank of india logo transparent png' returned 0 results.",
+      "alt": "State Bank of India Logo"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Design follows the '1 iOS-Native Clean' personality with 'Modern Premium FinTech' vibes, inspired by high-end financial platforms. ZERO blue or purple tones permitted.",
+    "Brand colors are deep Forest Green (#0A3B2A) with Amber/Gold highlights (#D4AF37) for premium offers like the Cash Refund banner.",
+    "For the Welcome Screen and Dashboard Hero, use the provided 'welcome_bg' and 'cash_refund_bg' images with the mandatory vertical gradient scrim (transparent to surfaceInverse) to guarantee text contrast. Ensure text overlay on images uses onSurfaceInverse.",
+    "Forms must use clean, large tap areas (44x44pt minimum) with labels positioned strictly above inputs. Single column only. Place primary CTAs sticky at the bottom over scrolling content, wrapped in a keyboard-avoiding view where applicable.",
+    "The Loan Status Tracker must visualize an 8-stage vertical pipeline. Active/Completed steps use brandPrimary, inactive use surfaceTertiary. It must look sleek and not overwhelming.",
+    "Use Phosphor icons consistently with weight=regular. Absolutely no emojis.",
+    "Bank logos failed to return transparent PNGs from Unsplash; implement the Initials Fallback strategy (e.g., 'HDFC', 'SBI') in a brandTertiary circle.",
+    "Incorporate a dedicated card for the Relationship Manager using 'rm_avatar', featuring 'Call' and 'Chat' action buttons.",
+    "Ensure 'Secure Upload' trust signals are prominent on the Document Upload screen, utilizing appropriate Phosphor lock/shield icons."
+  ]
+}
