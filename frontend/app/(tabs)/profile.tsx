@@ -62,12 +62,12 @@ export default function Profile() {
 
         <View style={{ marginTop: spacing.lg, gap: spacing.sm }}>
           {[
+            { id: "refer", label: "Refer & Earn", icon: "gift", route: "/refer" },
             { id: "promise", label: "Our Promise", icon: "ribbon", route: "/promise" },
             { id: "emi", label: "EMI Calculator", icon: "calculator", route: "/emi-calculator" },
             { id: "compare", label: "Bank Comparison", icon: "git-compare", route: "/bank-compare" },
-            { id: "refer", label: "Refer & Earn", icon: "gift", route: null },
           ].map((it) => (
-            <Pressable key={it.id} testID={`profile-link-${it.id}`} style={styles.link} onPress={() => it.route ? router.push(it.route as any) : openWhatsApp("Hi, I want to refer a friend to BorrowRight.")}>
+            <Pressable key={it.id} testID={`profile-link-${it.id}`} style={styles.link} onPress={() => router.push(it.route as any)}>
               <Ionicons name={it.icon as any} size={20} color={colors.brandPrimary} />
               <Text style={styles.linkText}>{it.label}</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceMuted} />

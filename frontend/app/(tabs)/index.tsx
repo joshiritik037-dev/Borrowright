@@ -25,7 +25,7 @@ const QUICK = [
   { id: "apply", label: "Apply Loan", icon: "add-circle", route: "/apply/select-type" },
   { id: "emi", label: "EMI Calc", icon: "calculator", route: "/emi-calculator" },
   { id: "compare", label: "Compare Banks", icon: "git-compare", route: "/bank-compare" },
-  { id: "promise", label: "Our Promise", icon: "ribbon", route: "/promise" },
+  { id: "refer", label: "Refer & Earn", icon: "gift", route: "/refer" },
 ];
 
 export default function Home() {

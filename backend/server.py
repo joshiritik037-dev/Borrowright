@@ -6,6 +6,9 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import uuid
+import re
+import secrets
+import hashlib
 import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
@@ -23,6 +26,15 @@ db = client[os.environ['DB_NAME']]
 PUSH_BASE_URL = "https://integrations.emergentagent.com"
 PUSH_KEY = os.environ.get("EMERGENT_PUSH_KEY", "placeholder")
 EMERGENT_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+
+# OTP provider switch: dev | msg91
+OTP_PROVIDER = os.environ.get("OTP_PROVIDER", "dev").lower()
+MSG91_AUTH_KEY = os.environ.get("MSG91_AUTH_KEY", "")
+MSG91_SENDER_ID = os.environ.get("MSG91_SENDER_ID", "SPLNDC")
+MSG91_TEMPLATE_ID = os.environ.get("MSG91_TEMPLATE_ID", "")
+
+# Refer & Earn — payout = REFERRAL_PCT * disbursed_amount
+REFERRAL_PCT = float(os.environ.get("REFERRAL_PCT", "0.001"))  # 0.10%
 
 app = FastAPI(title="BorrowRight API")
 api = APIRouter(prefix="/api")
@@ -76,18 +88,28 @@ class UserPublic(BaseModel):
 class OtpRequest(BaseModel):
     mobile: str
     name: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
 
 
 class OtpVerify(BaseModel):
     mobile: str
     code: str
     name: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
+    referral_code: Optional[str] = None
 
 
 class GoogleSessionBody(BaseModel):
     session_id: str
+    referral_code: Optional[str] = None
+
+
+class ApplyReferralBody(BaseModel):
+    referral_code: str
+
+
+class MarkDisbursedBody(BaseModel):
+    disbursed_amount: Optional[float] = None  # if not provided, uses loan_amount
 
 
 class ProfileUpdate(BaseModel):
@@ -203,6 +225,107 @@ async def create_session(user_id: str) -> str:
     return token
 
 
+# ---------------- OTP provider abstraction ----------------
+def _hash_otp(code: str) -> str:
+    return hashlib.sha256(code.encode()).hexdigest()
+
+
+async def _otp_store(mobile: str, code: str, ttl_sec: int = 600) -> None:
+    await db.otp_codes.update_one(
+        {"mobile": mobile},
+        {"$set": {
+            "mobile": mobile,
+            "code_hash": _hash_otp(code),
+            "expires_at": now_utc() + timedelta(seconds=ttl_sec),
+            "attempts": 0,
+        }},
+        upsert=True,
+    )
+
+
+async def _otp_check(mobile: str, code: str) -> bool:
+    rec = await db.otp_codes.find_one({"mobile": mobile}, {"_id": 0})
+    if not rec:
+        return False
+    exp = rec.get("expires_at")
+    if isinstance(exp, datetime):
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp < now_utc():
+            return False
+    if rec.get("attempts", 0) >= 5:
+        return False
+    await db.otp_codes.update_one({"mobile": mobile}, {"$inc": {"attempts": 1}})
+    return rec.get("code_hash") == _hash_otp(code)
+
+
+async def _msg91_send(mobile: str, code: str) -> None:
+    if not (MSG91_AUTH_KEY and MSG91_TEMPLATE_ID):
+        raise HTTPException(500, "MSG91 not configured")
+    mob = mobile.replace("+", "").strip()
+    payload = {
+        "template_id": MSG91_TEMPLATE_ID,
+        "sender": MSG91_SENDER_ID,
+        "mobiles": mob if mob.startswith("91") else f"91{mob}",
+        "otp": code,
+    }
+    async with httpx.AsyncClient(timeout=10.0) as cx:
+        r = await cx.post("https://control.msg91.com/api/v5/otp",
+                          json=payload,
+                          headers={"authkey": MSG91_AUTH_KEY, "content-type": "application/json"})
+    if r.status_code >= 400:
+        logger.warning(f"MSG91 send failed: {r.status_code} {r.text}")
+        raise HTTPException(502, "Could not send OTP")
+
+
+# ---------------- Referral helpers ----------------
+def _make_referral_code(name: Optional[str]) -> str:
+    base = re.sub(r"[^A-Za-z]", "", (name or "USER")).upper()[:6] or "USER"
+    suffix = secrets.token_hex(2).upper()  # 4 hex chars
+    return f"{base}-{suffix}"
+
+
+async def _ensure_referral_code(user: Dict[str, Any]) -> str:
+    code = user.get("referral_code")
+    if code:
+        return code
+    # Generate unique code
+    for _ in range(8):
+        candidate = _make_referral_code(user.get("name"))
+        exists = await db.users.find_one({"referral_code": candidate}, {"_id": 0, "user_id": 1})
+        if not exists:
+            await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"referral_code": candidate}})
+            return candidate
+    # Fallback
+    candidate = f"BR-{secrets.token_hex(3).upper()}"
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"referral_code": candidate}})
+    return candidate
+
+
+async def _apply_referral(new_user_id: str, referral_code: Optional[str]) -> None:
+    if not referral_code:
+        return
+    code = referral_code.strip().upper()
+    referrer = await db.users.find_one({"referral_code": code}, {"_id": 0})
+    if not referrer or referrer["user_id"] == new_user_id:
+        return
+    # idempotent — only once per referred user
+    existing = await db.referrals.find_one({"referred_user_id": new_user_id}, {"_id": 0})
+    if existing:
+        return
+    await db.referrals.insert_one({
+        "referral_id": new_id("ref"),
+        "referrer_user_id": referrer["user_id"],
+        "referred_user_id": new_user_id,
+        "status": "signed_up",  # signed_up | applied | disbursed
+        "reward_amount": 0,
+        "disbursed_amount": 0,
+        "created_at": now_utc(),
+        "updated_at": now_utc(),
+    })
+    await db.users.update_one({"user_id": new_user_id}, {"$set": {"referred_by_code": code}})
+
+
 # ----------------------------- Routes -----------------------------
 @api.get("/")
 async def root():
@@ -211,8 +334,14 @@ async def root():
 
 @api.post("/auth/otp/request")
 async def otp_request(body: OtpRequest):
-    # Dev OTP — always succeeds. Any 6-digit code accepted on verify.
-    return {"status": "sent", "mobile": body.mobile, "dev_hint": "Enter any 6-digit code"}
+    mobile = body.mobile.strip()
+    if OTP_PROVIDER == "msg91":
+        code = f"{secrets.randbelow(900000) + 100000}"
+        await _otp_store(mobile, code)
+        await _msg91_send(mobile, code)
+        return {"status": "sent", "mobile": mobile, "provider": "msg91"}
+    # dev provider — accept any 6-digit code at verify
+    return {"status": "sent", "mobile": mobile, "provider": "dev", "dev_hint": "Enter any 6-digit code"}
 
 
 @api.post("/auth/otp/verify")
@@ -220,8 +349,16 @@ async def otp_verify(body: OtpVerify):
     if not body.code or len(body.code) != 6 or not body.code.isdigit():
         raise HTTPException(400, "Enter a 6-digit code")
     mobile = body.mobile.strip()
+    if OTP_PROVIDER == "msg91":
+        ok = await _otp_check(mobile, body.code)
+        if not ok:
+            raise HTTPException(401, "Invalid or expired OTP")
+        await db.otp_codes.delete_one({"mobile": mobile})
+    # else: dev provider — any 6-digit accepted
     user = await db.users.find_one({"mobile": mobile}, {"_id": 0})
+    is_new = False
     if not user:
+        is_new = True
         user_id = new_id("usr")
         user = {
             "user_id": user_id,
@@ -233,8 +370,11 @@ async def otp_verify(body: OtpVerify):
         }
         await db.users.insert_one(dict(user))
         user.pop("_id", None)
+        await _ensure_referral_code(user)
+        await _apply_referral(user_id, body.referral_code)
     token = await create_session(user["user_id"])
-    return {"session_token": token, "user": _clean(user)}
+    fresh = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    return {"session_token": token, "user": _clean(fresh), "is_new": is_new}
 
 
 @api.post("/auth/google/session")
@@ -248,7 +388,9 @@ async def google_session(body: GoogleSessionBody):
     if not email:
         raise HTTPException(400, "Missing email from Google")
     user = await db.users.find_one({"email": email}, {"_id": 0})
+    is_new = False
     if not user:
+        is_new = True
         user_id = new_id("usr")
         user = {
             "user_id": user_id,
@@ -259,9 +401,11 @@ async def google_session(body: GoogleSessionBody):
             "created_at": now_utc(),
         }
         await db.users.insert_one(dict(user))
+        await _ensure_referral_code(user)
+        await _apply_referral(user_id, body.referral_code)
     token = await create_session(user["user_id"])
     user_clean = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
-    return {"session_token": token, "user": _clean(user_clean)}
+    return {"session_token": token, "user": _clean(user_clean), "is_new": is_new}
 
 
 @api.get("/auth/me")
@@ -472,6 +616,14 @@ async def submit_application(app_id: str, authorization: Optional[str] = Header(
             "updated_at": now_utc(),
         }},
     )
+    # Update referral: mark the user as 'applied' so referrer can see progress
+    try:
+        await db.referrals.update_one(
+            {"referred_user_id": user["user_id"], "status": "signed_up"},
+            {"$set": {"status": "applied", "applied_application_id": app_id, "updated_at": now_utc()}},
+        )
+    except Exception as e:
+        logger.warning(f"referral applied update failed: {e}")
     # Fire-and-forget push
     try:
         await send_push(
@@ -484,6 +636,116 @@ async def submit_application(app_id: str, authorization: Optional[str] = Header(
         )
     except Exception as e:
         logger.warning(f"push failed (non-blocking): {e}")
+    fresh = await db.applications.find_one({"application_id": app_id}, {"_id": 0})
+    return _clean(fresh)
+
+
+# ---------------- Refer & Earn ----------------
+@api.get("/me/referrals")
+async def my_referrals(authorization: Optional[str] = Header(default=None)):
+    user = await current_user(authorization)
+    code = await _ensure_referral_code(user)
+    cursor = db.referrals.find({"referrer_user_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1)
+    items = await cursor.to_list(200)
+    # Enrich with referred user names
+    enriched = []
+    total_earned = 0.0
+    pending_earned = 0.0
+    for r in items:
+        ru = await db.users.find_one({"user_id": r["referred_user_id"]}, {"_id": 0, "name": 1, "mobile": 1, "created_at": 1})
+        reward = float(r.get("reward_amount") or 0)
+        if r.get("status") == "disbursed":
+            total_earned += reward
+        else:
+            pending_earned += reward
+        enriched.append({
+            **_clean(r),
+            "referred_name": (ru or {}).get("name") or "Pending",
+            "referred_mobile_mask": _mask_mobile((ru or {}).get("mobile")),
+        })
+    return {
+        "referral_code": code,
+        "share_text": _share_text(user.get("name"), code),
+        "stats": {
+            "total_invites": len(items),
+            "signed_up": sum(1 for r in items if r.get("status") in ("signed_up", "applied", "disbursed")),
+            "applied": sum(1 for r in items if r.get("status") in ("applied", "disbursed")),
+            "disbursed": sum(1 for r in items if r.get("status") == "disbursed"),
+            "total_earned": round(total_earned),
+            "pending_earned": round(pending_earned),
+            "reward_pct": REFERRAL_PCT * 100,
+        },
+        "referrals": enriched,
+    }
+
+
+@api.post("/me/referrals/apply")
+async def apply_referral_post(body: ApplyReferralBody, authorization: Optional[str] = Header(default=None)):
+    user = await current_user(authorization)
+    if user.get("referred_by_code"):
+        raise HTTPException(400, "Referral code already applied")
+    # Don't allow self-referral
+    code = body.referral_code.strip().upper()
+    if user.get("referral_code") == code:
+        raise HTTPException(400, "Cannot use your own code")
+    referrer = await db.users.find_one({"referral_code": code}, {"_id": 0})
+    if not referrer:
+        raise HTTPException(404, "Invalid referral code")
+    await _apply_referral(user["user_id"], code)
+    return {"status": "applied", "referrer_name": referrer.get("name") or "Friend"}
+
+
+@api.post("/applications/{app_id}/mark-disbursed")
+async def mark_disbursed(app_id: str, body: MarkDisbursedBody, authorization: Optional[str] = Header(default=None)):
+    """Simulate disbursement (in production this would be admin-gated).
+    Moves application to 'disbursed' stage and computes referral reward."""
+    user = await current_user(authorization)
+    app_doc = await db.applications.find_one({"application_id": app_id, "user_id": user["user_id"]}, {"_id": 0})
+    if not app_doc:
+        raise HTTPException(404, "Application not found")
+    disbursed = float(body.disbursed_amount or app_doc.get("loan_amount") or 0)
+    if disbursed <= 0:
+        raise HTTPException(400, "Disbursed amount required")
+    all_stages = STAGES  # full pipeline
+    await db.applications.update_one(
+        {"application_id": app_id},
+        {"$set": {
+            "status": "disbursed",
+            "stage": "disbursement",
+            "stages_completed": all_stages,
+            "disbursed_amount": disbursed,
+            "disbursed_at": now_utc(),
+            "updated_at": now_utc(),
+        }},
+    )
+    # Award referral
+    ref = await db.referrals.find_one({"referred_user_id": user["user_id"]}, {"_id": 0})
+    if ref and ref.get("status") != "disbursed":
+        reward = round(disbursed * REFERRAL_PCT)
+        await db.referrals.update_one(
+            {"referral_id": ref["referral_id"]},
+            {"$set": {
+                "status": "disbursed",
+                "reward_amount": reward,
+                "disbursed_amount": disbursed,
+                "disbursed_application_id": app_id,
+                "updated_at": now_utc(),
+            }},
+        )
+        # Notify the referrer
+        try:
+            referrer_name = (await db.users.find_one({"user_id": ref["referrer_user_id"]}, {"_id": 0, "name": 1}) or {}).get("name") or "there"
+            await send_push(
+                recipients=[ref["referrer_user_id"]],
+                data={
+                    "title": f"You earned ₹{reward:,}! 🎉",
+                    "message": f"Your friend's loan was disbursed. Your reward has been credited.",
+                    "action_url": "/refer",
+                },
+                idempotency_key=f"reward-{ref['referral_id']}",
+            )
+        except Exception as e:
+            logger.warning(f"reward push failed: {e}")
     fresh = await db.applications.find_one({"application_id": app_id}, {"_id": 0})
     return _clean(fresh)
 
@@ -557,18 +819,42 @@ def _clean(d: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     return d
 
 
+def _mask_mobile(m: Optional[str]) -> Optional[str]:
+    if not m:
+        return None
+    digits = re.sub(r"\D", "", m)
+    if len(digits) < 4:
+        return "•••"
+    return f"•••••{digits[-4:]}"
+
+
+def _share_text(name: Optional[str], code: str) -> str:
+    n = (name or "I").strip().split(" ")[0]
+    return (
+        f"Hi! I'm using BorrowRight by Splendid Consultants to get loans at the lowest possible cost — "
+        f"transparent, no brokers, no hidden charges. Use my code *{code}* to get a dedicated RM and "
+        f"share in the savings (min 15% cash refund). Download now."
+    )
+
+
 # ---------------- Startup ----------------
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("user_id", unique=True)
     await db.users.create_index("email", sparse=True)
     await db.users.create_index("mobile", sparse=True)
+    await db.users.create_index("referral_code", sparse=True, unique=True)
     await db.user_sessions.create_index("session_token", unique=True)
     await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
     await db.applications.create_index("application_id", unique=True)
     await db.applications.create_index("user_id")
     await db.documents.create_index("document_id", unique=True)
     await db.documents.create_index("application_id")
+    await db.referrals.create_index("referral_id", unique=True)
+    await db.referrals.create_index("referrer_user_id")
+    await db.referrals.create_index("referred_user_id", unique=True)
+    await db.otp_codes.create_index("mobile", unique=True)
+    await db.otp_codes.create_index("expires_at", expireAfterSeconds=0)
     logger.info("DB indexes ready")
 
 

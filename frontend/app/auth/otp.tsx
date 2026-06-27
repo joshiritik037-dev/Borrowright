@@ -13,6 +13,7 @@ export default function Otp() {
   const { mobile } = useLocalSearchParams<{ mobile: string }>();
   const { signInWithOtp } = useAuth();
   const [code, setCode] = useState(["", "", "", "", "", ""]);
+  const [refCode, setRefCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resendIn, setResendIn] = useState(30);
@@ -38,7 +39,7 @@ export default function Otp() {
     setError(null);
     setLoading(true);
     try {
-      await signInWithOtp(String(mobile), full);
+      await signInWithOtp(String(mobile), full, refCode ? { name: undefined, email: undefined, referral_code: refCode.trim().toUpperCase() } as any : undefined);
     } catch (e: any) {
       setError(e?.message || "Verification failed");
     } finally {
@@ -82,6 +83,20 @@ export default function Otp() {
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
+          {/* Optional referral code */}
+          <View style={styles.refWrap}>
+            <Text style={styles.refLabel}>Have a referral code? (optional)</Text>
+            <TextInput
+              testID="otp-referral-input"
+              value={refCode}
+              onChangeText={(v) => setRefCode(v.toUpperCase())}
+              placeholder="e.g. RAVIKU-0327"
+              placeholderTextColor={colors.onSurfaceMuted}
+              autoCapitalize="characters"
+              style={styles.refInput}
+            />
+          </View>
+
           <View style={{ height: spacing.xl }} />
           <Button title="Verify & Continue" onPress={verify} loading={loading} testID="otp-verify-button" />
 
@@ -109,4 +124,7 @@ const styles = StyleSheet.create({
   boxFilled: { borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary },
   error: { color: colors.error, fontSize: fontSize.sm, marginTop: spacing.md, textAlign: "center" },
   resend: { color: colors.brandPrimary, fontSize: fontSize.md, fontWeight: "700", textAlign: "center" },
+  refWrap: { marginTop: spacing.lg },
+  refLabel: { fontSize: fontSize.xs, color: colors.onSurfaceMuted, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: spacing.xs },
+  refInput: { height: 48, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, fontSize: fontSize.md, fontWeight: "700", letterSpacing: 1, color: colors.onSurface, backgroundColor: colors.surfaceSecondary },
 });

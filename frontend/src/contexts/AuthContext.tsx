@@ -28,7 +28,7 @@ export type User = {
 type AuthCtx = {
   user: User | null;
   loading: boolean;
-  signInWithOtp: (mobile: string, code: string, extra?: { name?: string; email?: string }) => Promise<User>;
+  signInWithOtp: (mobile: string, code: string, extra?: { name?: string; email?: string; referral_code?: string }) => Promise<User>;
   signInWithGoogleSession: (session_id: string) => Promise<User>;
   refresh: () => Promise<User | null>;
   updateProfile: (patch: Partial<User>) => Promise<User>;
@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (async () => { await refresh(); setLoading(false); })();
   }, [refresh]);
 
-  const signInWithOtp = async (mobile: string, code: string, extra?: { name?: string; email?: string }) => {
+  const signInWithOtp = async (mobile: string, code: string, extra?: { name?: string; email?: string; referral_code?: string }) => {
     const res = await api.post<{ session_token: string; user: User }>("/auth/otp/verify", { mobile, code, ...extra });
     await setToken(res.session_token);
     setUser(res.user);
