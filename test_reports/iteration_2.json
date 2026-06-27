@@ -1,0 +1,101 @@
+{
+  "summary": "Iteration 2 — Frontend retest. Two new critical issues found. (1) /app/frontend/app/_layout.tsx had a stray trailing fragment (`ureHandlerRootView>` + extra `);}`) that caused the entire web bundle to render BLANK (Babel/Metro error). FIXED by truncating to line 123. (2) Apply requirement screen still sends `email: \"\"` in POST /applications, which the backend rejects with HTTP 422 (Pydantic EmailStr — same root cause that broke onboarding in iteration 1). Onboarding-only strip-empties patch was not extended to /apply/requirement.tsx. (3) RootGate in _layout.tsx does not redirect a signed-in but not-yet-onboarded user from /auth/* to /onboarding, so brand-new users are stuck on the OTP screen even though /auth/otp/verify returned 200 — only a manual goto('/onboarding') unblocked them. Once the user is onboarded (subsequent logins), RootGate correctly redirects to /(tabs). All other flows verified end-to-end: /promise is public, EMI calculator, Bank Compare (6 cards + BEST VALUE), Welcome→Login→OTP, Onboarding submit (200), Home (15% hero, RM Call/WhatsApp, home-start-apply), Loans (8 loan-type-* cards), Apply requirement→documents→review→submit→success→status (after typing email to bypass bug 2), Status (8-stage vertical stepper, Submitted=Completed), Profile (user info, profile-rm-call/whatsapp, FAQ accordion, profile-sign-out). Deprecated shadow*/expo-notifications web-listener warnings still present.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/applications",
+        "issue": "Returns 422 when `email` field is an empty string. Detail: `value is not a valid email address: An email address must have an @-sign`. The frontend requirement.tsx spreads the form including `email: ''`, so any user who doesn't manually type an email gets blocked at the requirement screen. RCA: backend ApplicationCreate (or shared model) declares `email: Optional[EmailStr]` which Pydantic v2 rejects on empty string. Fix backend (`Optional[EmailStr]` → custom validator that returns None for empty) OR strip empties in /app/frontend/app/apply/requirement.tsx submit() like onboarding does.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "_layout.tsx (Expo root layout)",
+        "issue": "File ended with stray fragment `ureHandlerRootView>\\n  );\\n}` (lines 124-126), causing a Babel parse error → blank web page on https://splendid-fintech.preview.emergentagent.com. Reference: /app/frontend/app/_layout.tsx EOF. FIXED by testing agent — truncated file to 123 lines.",
+        "testID": "n/a",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "RootGate auth redirect (_layout.tsx)",
+        "issue": "After a brand-new user verifies OTP successfully (POST /auth/otp/verify → 200, user has onboarded=false), the user stays stuck on /auth/otp. RootGate only redirects `inAuth → (tabs)` when user.onboarded is true; missing branch: `if (user && !user.onboarded && (inAuth || first === 'welcome' || first === '')) router.replace('/onboarding')`. Reference: /app/frontend/app/_layout.tsx:66-72. Workaround during testing: manual goto('/onboarding').",
+        "testID": "otp-verify-button",
+        "priority": "HIGH"
+      },
+      {
+        "component": "Apply requirement screen email field",
+        "issue": "Submit spreads `{...f}` including empty `email: ''`, triggering backend 422 (see backend critical). Reference: /app/frontend/app/apply/requirement.tsx:36-53. Fix: same empty-stripping logic that was applied to onboarding.tsx, OR fix backend EmailStr.",
+        "testID": "req-continue-button",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "OTP input row overflow on 390px viewport",
+        "issue": "Six OTP boxes overflow horizontally — visually only ~1.5 are visible, the rest clipped off-screen. Functionally the inputs accept values, but UX is broken on mobile. Reference: /app/frontend/app/auth/otp.tsx styles.box (`flex: 1` but parent has no `flex: 1` on row, plus large `gap: spacing.sm`).",
+        "testID": "otp-input-0..5",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Brand-new user signup → onboarding",
+        "issue": "OTP verify succeeds but user stuck on /auth/otp; needs RootGate fix OR a router.replace('/onboarding') inside otp.tsx after signInWithOtp resolves.",
+        "affected_testIDs": ["otp-verify-button"]
+      },
+      {
+        "flow": "Apply loan (Loans → loan-type-home → requirement → documents)",
+        "issue": "Blocked at POST /applications with 422 unless user manually fills email. Fix backend EmailStr OR frontend strip-empties.",
+        "affected_testIDs": ["req-continue-button", "req-email"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "OTP",
+        "issues": [
+          "Input row overflows on 390px width; reduce gap or set explicit box width (~48px) so all 6 boxes fit within screen."
+        ]
+      }
+    ],
+    "react_native_issues": [
+      {
+        "component": "Deprecated shadow* style props",
+        "issue": "Console warning `\"shadow*\" style props are deprecated. Use \"boxShadow\".` still emitted on every screen. Reference: across StyleSheet objects in /app/frontend/app/** and /app/frontend/src/components/**."
+      },
+      {
+        "component": "expo-notifications on web",
+        "issue": "`[expo-notifications] Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.` — guard listeners with `Platform.OS !== 'web'` in /app/frontend/app/_layout.tsx."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_borrowright_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "FIX (CRITICAL): backend POST /applications — make `email` accept empty string/None. Either change to `Optional[str]` with @field_validator that coerces ''→None and regex-validates non-empty, OR add Pydantic BeforeValidator. Same pattern should be applied to ALL EmailStr fields in server.py to avoid future regressions.",
+    "FIX (CRITICAL): /app/frontend/app/apply/requirement.tsx submit() should strip empty/null/undefined fields before POST (mirror the fix already applied to /app/frontend/app/onboarding.tsx).",
+    "FIX (HIGH): /app/frontend/app/_layout.tsx RootGate — add branch: `else if (!user.onboarded && (inAuth || first === 'welcome' || first === '')) router.replace('/onboarding')`. Without this, every brand-new user is stuck on /auth/otp after OTP verification despite a successful session token.",
+    "FIX (MEDIUM): /app/frontend/app/auth/otp.tsx — make OTP row responsive on 390px width (reduce gap, or set fixed small width per box).",
+    "FIX (LOW): replace deprecated `shadow*` style props with `boxShadow` / `elevation` across all StyleSheet objects.",
+    "FIX (LOW): guard expo-notifications listener registration in _layout.tsx with `Platform.OS !== 'web'`."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/app/_layout.tsx had stale junk at EOF — indicates an unreviewed save/diff merge; add a lint pre-commit (tsc --noEmit) to catch.",
+    "Both /apply/requirement.tsx and /onboarding.tsx independently maintain an empty-stripping concern. Extract a shared `stripEmpties(obj)` util in /app/frontend/src/lib/ so future forms don't break.",
+    "Backend EmailStr usage is fragile across multiple endpoints — centralize via a custom `EmptyStrAsNoneEmail` type or a root validator on every model that accepts user-typed email."
+  ],
+  "updated_files": [
+    "/app/frontend/app/_layout.tsx (truncated trailing fragment; restored to valid TSX)"
+  ],
+  "success_rate": {
+    "backend": "Not re-tested (per request); 22/22 in iteration 1 — but POST /applications still 422s on empty email which iteration 1 suite did not cover for the apply path.",
+    "frontend": "~85% — all UI flows verified except: (a) brand-new-user OTP-to-onboarding redirect blocked (workaround used), (b) requirement.tsx submit needs manual email entry to bypass 422."
+  },
+  "seed_data_creation": "Logged in with mobile 9123456789 (any 6-digit OTP). Created 1 home loan application app_079bcda2db2f (₹50L, Mumbai/MH) for the status screen verification. Existing test user from iteration 1 (9876543210) untouched.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "After main agent fixes the 3 critical/high items (backend EmailStr empty handling, requirement.tsx strip-empties, RootGate non-onboarded redirect), re-run the full flow: clear localStorage → /welcome → Get Started → mobile 9555500001 → OTP 123456 → SHOULD AUTO-NAV to /onboarding (no manual goto) → fill name+city+state+dob+pan ONLY (leave email blank) → ob-submit-button → /(tabs) home → Loans → loan-type-home → req fill WITHOUT email → req-continue-button → must reach /apply/documents (currently 422) → docs-continue → review-submit → success-track → status (8 stages). Also verify OTP boxes fit in 390px viewport after CSS fix. /promise public access confirmed working — no need to re-test that branch.",
+  "rca_of_issue": "Three RCAs: (1) Blank page — _layout.tsx EOF had `ureHandlerRootView>\\n  );\\n}` appended after the proper closing brace, causing Babel to throw. Fixed by truncating to 123 lines. (2) Apply 422 — backend Pydantic EmailStr on `email` field rejects empty string; frontend requirement.tsx sends `email: ''` because submit spreads the whole form state. (3) New-user stuck on /auth/otp — RootGate redirect table has no case for `signed-in AND !onboarded AND inAuth`; the existing onboarding nav only triggers when user navigates to /(tabs), but otp.tsx never pushes anywhere — it relies on RootGate alone."
+}

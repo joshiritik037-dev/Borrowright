@@ -43,15 +43,17 @@ export default function Onboarding() {
     }
     setSaving(true);
     try {
-      await updateProfile({
-        ...form,
-        monthly_income: form.monthly_income ? Number(form.monthly_income) : undefined,
-        cibil_score: form.cibil_score ? Number(form.cibil_score) : undefined,
-        onboarded: true,
-      } as any);
+      const cleaned: any = { onboarded: true };
+      Object.entries(form).forEach(([k, v]) => {
+        if (v === "" || v === null || v === undefined) return;
+        cleaned[k] = v;
+      });
+      if (cleaned.monthly_income) cleaned.monthly_income = Number(cleaned.monthly_income);
+      if (cleaned.cibil_score) cleaned.cibil_score = Number(cleaned.cibil_score);
+      await updateProfile(cleaned);
       router.replace("/(tabs)");
     } catch (e: any) {
-      setError(e?.message || "Save failed");
+      setError(e?.message || "Save failed. Please check your inputs and try again.");
     } finally {
       setSaving(false);
     }

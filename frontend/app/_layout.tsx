@@ -60,11 +60,12 @@ function RootGate() {
     if (loading) return;
     const first = segments[0] ?? "";
     const inAuth = first === "auth";
-    const inApp = first === "(tabs)" || first === "apply" || first === "onboarding" || first === "promise" || first === "emi-calculator" || first === "bank-compare";
+    // Pages that require an authenticated AND onboarded user
+    const inProtected = first === "(tabs)" || first === "apply" || first === "onboarding";
 
     if (!user) {
-      if (inApp) router.replace("/welcome");
-    } else if (!user.onboarded && first !== "onboarding") {
+      if (inProtected) router.replace("/welcome");
+    } else if (!user.onboarded && first === "(tabs)") {
       router.replace("/onboarding");
     } else if (user.onboarded && (inAuth || first === "welcome" || first === "")) {
       router.replace("/(tabs)");
@@ -87,7 +88,7 @@ export default function RootLayout() {
   }, [loaded, error]);
 
   useEffect(() => {
-    if (Platform.OS === "web") return;
+    if (Platform.OS === "web") return undefined;
     const tapSub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = (response.notification.request.content.data as any) || {};
       const url = data.deeplink || data.action_url;
