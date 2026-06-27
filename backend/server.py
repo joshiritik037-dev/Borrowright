@@ -92,7 +92,7 @@ class GoogleSessionBody(BaseModel):
 
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     occupation: Optional[str] = None
@@ -130,7 +130,7 @@ class ApplicationCreate(BaseModel):
     state: Optional[str] = None
     whatsapp_number: Optional[str] = None
     alternate_mobile: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     preferred_contact_time: Optional[str] = None
     preferred_communication: Optional[str] = None
 

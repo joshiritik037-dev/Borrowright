@@ -23,7 +23,6 @@
         "backgroundColor": "#0A3B2A"
       },
       "edgeToEdgeEnabled": true,
-      "googleServicesFile": "./google-services.json",
       "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"]
     },
     "web": {

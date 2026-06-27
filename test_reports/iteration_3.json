@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 3 RETEST — all 3 critical fixes from iteration 2 are VERIFIED WORKING end-to-end. (1) POST /api/applications with empty email field now returns HTTP 200 (was 422). Verified via curl smoke (app_cf2912efff22 created with email='') AND via UI flow (app_79335e183501 created after req-continue with email blank → router pushed to /apply/documents). (2) Brand-new OTP-verified user is now auto-redirected from /auth/otp to /onboarding by RootGate — verified in two independent fresh-localStorage runs with mobiles 9555510042 / 9555510052 / 9555510062 / 9555510072 (all landed on /onboarding without manual navigation). (3) OTP input row fits cleanly on 390px viewport — measured x=24 → 366 (within 390), no horizontal overflow. (4) Backend pytest 22/22 PASS in 1.62s. (5) Full happy path verified: Welcome→Login→OTP→Onboarding→Home→Apply Now→loan-type-home (testID is `apply-type-home`, NOT `loan-type-home`)→Requirement (no email)→Documents (docs-continue-button)→Review (review-submit-button)→Success (success-track-button shows Application ID app_1ab94f027b4d)→Status (8 vertical stages: Submitted/Completed, Documents Received/Bank Login/Legal Verification/Valuation/Approval/Sanction Letter/Disbursement Pending; 13% complete progress bar). No regressions detected. Deprecated shadow*/expo-notifications-web warnings still present (LOW priority, carried over from iter 2).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "Deprecated shadow* style props",
+        "issue": "Console warning `\"shadow*\" style props are deprecated. Use \"boxShadow\".` still emitted across screens. Reference: StyleSheet objects throughout /app/frontend/app/** and /app/frontend/src/components/**."
+      },
+      {
+        "component": "expo-notifications on web",
+        "issue": "`[expo-notifications] Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.` — module-scope setNotificationHandler / setNotificationChannelAsync calls execute on web. _layout.tsx already guards via `Platform.OS !== 'web'`, but the warning still surfaces — likely from the @expo/vector-icons or another transitive listener. Low priority; web is dev-preview only."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_borrowright_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(LOW, carried over) Replace deprecated `shadow*` style props with `boxShadow` / `elevation` across StyleSheet objects.",
+    "(LOW, carried over) Investigate residual expo-notifications web warning — may need to also guard module-scope assignments at file-top in _layout.tsx (currently already guarded; warning may come from a dependency)."
+  ],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": { "backend": "100% (22/22 pytest + empty-email curl smoke 200)", "frontend": "100% on all RETEST items + full happy-path end-to-end" },
+  "seed_data_creation": "Created test users with mobiles 9555510042, 9555510052, 9555510062, 9555510072 (all dev OTP 123456). Created home-loan applications app_cf2912efff22 (curl), app_79335e183501, app_1ab94f027b4d (UI) — ₹50L Mumbai/MH. Backend pytest user 9876500001 untouched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 3 critical fixes from iteration 2 are confirmed working. App is in a release-ready state for the dev OTP + WhatsApp deeplink MVP. If main agent makes further changes, exercise: (a) /welcome → fresh-mobile OTP → must auto-land on /onboarding, (b) /apply/requirement submit with blank email → must reach /apply/documents (no 422), (c) full happy path Documents → Review → Submit → Success → Status with 8 stages. Note: loan-type buttons use testID `apply-type-{home|lap|car|personal|business|construction|working_capital|other}` (NOT `loan-type-*`). Documents continue is `docs-continue-button`. Review submit is `review-submit-button`. Status stages may not expose `status-stage-{key}` testIDs — visually verify the 8-row vertical stepper instead.",
+  "rca_of_issue": "n/a — all previously reported bugs are fixed. Iteration 2 RCAs (1) backend Pydantic EmailStr rejecting '', (2) RootGate missing branch for signed-in-but-not-onboarded, (3) OTP row overflow — all three patches confirmed in /app/backend/server.py (ProfileUpdate.email + ApplicationCreate.email = Optional[str]), /app/frontend/app/_layout.tsx:68-70 (else-if !onboarded redirect to /onboarding), /app/frontend/app/auth/otp.tsx:107-108 (otpRow gap=spacing.xs + space-between, box width=48)."
+}

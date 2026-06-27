@@ -38,17 +38,18 @@ export default function Requirement() {
     if (!f.loan_amount || !f.purpose || !f.full_address || !f.pin_code || !f.city || !f.state) { setError("Please fill all required fields"); return; }
     setSaving(true);
     try {
-      const payload = {
-        loan_type,
-        ...f,
-        loan_amount: Number(f.loan_amount),
-        property_value: f.property_value ? Number(f.property_value) : undefined,
-        current_emi: f.current_emi ? Number(f.current_emi) : undefined,
-      };
-      const app = await api.post<any>("/applications", payload);
+      const cleaned: any = { loan_type };
+      Object.entries(f).forEach(([k, v]) => {
+        if (v === "" || v === null || v === undefined) return;
+        cleaned[k] = v;
+      });
+      if (cleaned.loan_amount) cleaned.loan_amount = Number(cleaned.loan_amount);
+      if (cleaned.property_value) cleaned.property_value = Number(cleaned.property_value);
+      if (cleaned.current_emi) cleaned.current_emi = Number(cleaned.current_emi);
+      const app = await api.post<any>("/applications", cleaned);
       router.push({ pathname: "/apply/documents", params: { application_id: app.application_id } });
     } catch (e: any) {
-      setError(e?.message || "Could not save"); 
+      setError(e?.message || "Could not save");
     } finally { setSaving(false); }
   };
 
