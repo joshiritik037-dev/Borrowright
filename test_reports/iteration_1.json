@@ -1,0 +1,92 @@
+{
+  "summary": "Backend: 22/22 pytest passed (100%). All required endpoints — healthcheck, loan-types (8), banks (6 with EMI & 1 best_value), faqs (6), promise, OTP request/verify (incl. 6-digit validation), auth/me with Bearer, profile update, applications CRUD + documents (base64 excluded on GET list), submit + 8-stage timeline, _id excluded everywhere, 401 for missing/invalid token, 404 for missing app — all verified. Frontend: splash → /welcome → /auth/login → /auth/otp → /onboarding flow works and OTP creates a session. CRITICAL BLOCKER: onboarding submit returns 422 (Pydantic EmailStr rejects empty string), which prevents reaching /(tabs). Because onboarding is blocked, none of the tab screens (Home, Loans, Status, Profile), Apply flow, EMI calculator, Bank Compare or /promise could be exercised post-login (auth-gated). TestID naming mismatch on onboarding fields (`ob-name`, `ob-city`, `ob-state`, `ob-dob`, `ob-pan` vs. expected `*-input`).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Onboarding submit (PUT /api/me/profile)",
+        "issue": "Submit returns HTTP 422 because the form sends `email: \"\"` (empty string) which fails Pydantic `EmailStr` validation on backend ProfileUpdate. User is stuck on /onboarding and cannot reach /(tabs). RCA: /app/frontend/app/onboarding.tsx line 46-52 spreads `{...form}` including empty optional fields (email, gender, aadhaar, monthly_income, company_name, marital_status, employment_type, cibil_score). Fix: strip empty strings / undefined before calling updateProfile, OR change backend ProfileUpdate.email to `Optional[str]` with manual regex (currently EmailStr).",
+        "testID": "ob-submit-button",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "Onboarding inputs testID naming",
+        "issue": "Review request expected `ob-name-input`, `ob-city-input`, `ob-state-input`, `ob-dob-input`, `ob-pan-input`, but code uses `ob-name`, `ob-city`, `ob-state`, `ob-dob`, `ob-pan` (no `-input` suffix). Reference: /app/frontend/app/onboarding.tsx:78-91. Either align the testIDs or update spec.",
+        "testID": "ob-name | ob-city | ob-state | ob-dob | ob-pan",
+        "priority": "LOW"
+      },
+      {
+        "component": "/promise route",
+        "issue": "Public `/promise` page redirects to /welcome when user is not authenticated. The review request and Welcome screen marketing flow suggest /promise should be accessible without login. Likely the global auth guard is too aggressive (catches all routes). Reference: /app/frontend/app/_layout.tsx.",
+        "testID": "n/a",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Onboarding → Home tabs",
+        "issue": "Blocked by 422 — user stays on /onboarding indefinitely; no error toast is shown to the user (silent failure).",
+        "affected_testIDs": ["ob-submit-button"]
+      },
+      {
+        "flow": "Home, Loans, Status, Profile, Apply, EMI, Bank Compare",
+        "issue": "Could not be tested via UI because onboarding blocker prevents reaching /(tabs). All other backend endpoints these screens depend on are verified working.",
+        "affected_testIDs": ["rm-call-button", "rm-whatsapp-button", "home-start-apply", "loan-type-home", "loan-type-lap", "loan-type-car", "loan-type-personal", "loan-type-business", "loan-type-construction", "loan-type-working_capital", "loan-type-other", "bank-card-hdfc", "bank-card-sbi", "bank-card-icici", "bank-card-axis", "bank-card-kotak", "bank-card-pnb", "review-submit-button", "success-track-button", "profile-sign-out"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "OTP",
+        "issues": [
+          "OTP input boxes overflow horizontally on 390px-wide viewport — last few boxes are clipped off-screen. Reference: /app/frontend/app/auth/otp.tsx — make container responsive (flexShrink / smaller gap / smaller box width)."
+        ]
+      }
+    ],
+    "react_native_issues": [
+      {
+        "component": "Deprecated style props",
+        "issue": "Console warning: `\"shadow*\" style props are deprecated. Use \"boxShadow\".` — fires multiple times during render. Search and replace usages of `shadowColor / shadowOffset / shadowOpacity / shadowRadius` in stylesheets to use the new `boxShadow` shorthand or `elevation` for Android. Reference: across multiple style files in /app/frontend/app/** and /app/frontend/src/components/**."
+      },
+      {
+        "component": "expo-notifications on web",
+        "issue": "Console warning: `[expo-notifications] Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.` — push token listeners are wired up unconditionally. Guard registration with `Platform.OS !== 'web'` to silence and prevent runtime no-ops."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_borrowright_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "FIX (CRITICAL): Onboarding 422 blocker. Either (a) in /app/frontend/app/onboarding.tsx submit(), filter out empty-string / null / undefined fields before calling updateProfile, OR (b) loosen backend ProfileUpdate.email to Optional[str] in /app/backend/server.py and validate format only when non-empty.",
+    "FIX (HIGH): Make /promise accessible without authentication — adjust auth guard in /app/frontend/app/_layout.tsx to allow ['/welcome', '/promise', '/auth/login', '/auth/otp'] when not signed in.",
+    "FIX (MED): Show inline error message on onboarding when submit fails (currently silent — `setError(e?.message)` may be invisible if API error swallowed).",
+    "FIX (LOW): Either rename onboarding testIDs to `ob-*-input` (as per spec) or update spec to match current `ob-*` convention.",
+    "FIX (LOW): Replace deprecated shadow* style props with boxShadow / elevation in StyleSheet objects (frontend-wide).",
+    "FIX (LOW): Guard expo-notifications push token registration with `Platform.OS !== 'web'`.",
+    "FIX (LOW): OTP input row overflows on 390px wide viewport — make the 6 input boxes responsive."
+  ],
+  "critical_code_review_comments": [
+    "server.py line 281: `PUT /me/profile` — `email: Optional[EmailStr]` will 422 on `\"\"`. Should accept empty/null gracefully.",
+    "server.py uses deprecated FastAPI `@app.on_event('startup'/'shutdown')` — migrate to lifespan context (warnings will appear in newer FastAPI).",
+    "server.py — file is reasonable size (~590 lines) but mixes models, routes, helpers, push integration. Consider splitting models / routers / services for maintainability.",
+    "Frontend onboarding.tsx submit spreads entire form including empty optional strings — fragile against any backend EmailStr/regex-strict field."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py (new)",
+    "/app/backend/tests/test_borrowright_api.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (22/22)",
+    "frontend": "~30% (5/16 flows verified — splash/welcome/login/OTP/auth all work; everything past onboarding blocked by 422)"
+  },
+  "seed_data_creation": "Tests create users with mobiles 9876500001, 9999900001-4, 9876543210 and one TEST_ home loan application. No production data touched. DB indexes auto-managed by backend startup.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend is fully green (22 tests). After main agent fixes the onboarding 422 (strip empties or relax EmailStr) and makes /promise public, re-run the same pytest suite then run the frontend Playwright flow for: onboarding submit → /(tabs) → home (rm-call/whatsapp/home-start-apply) → loans (8 loan-type-* cards) → bank-compare (6 bank-card-* + BEST VALUE) → emi-calculator (EMI updates) → apply (select-type → requirement → documents → review → success → status) → profile (profile-sign-out). Use mobile 9876543210 + OTP 123456. Token storage uses expo-secure-store (mapped to AsyncStorage on web) under key from /app/frontend/src/lib/api.ts TOKEN_KEY — programmatic bypass via localStorage did NOT work in this run; recommend running the full UI flow once onboarding is fixed.",
+  "rca_of_issue": "Onboarding 422 RCA — Pydantic v2 EmailStr rejects empty string. The frontend form initializes `email: \"\"` and includes it in the PUT payload via `{...form}` spread, even though `Optional[EmailStr]` should accept null. Repro: log in with any 10-digit mobile + any 6-digit OTP, leave email blank, fill name/city/state/dob/pan, tap Continue → network returns 422 → user is stuck on /onboarding silently. Mitigation options: (1) strip falsy values in submit, (2) coerce empty to null/undefined, (3) backend changes EmailStr to a regex-validated Optional[str]."
+}
