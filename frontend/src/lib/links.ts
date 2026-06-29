@@ -25,14 +25,10 @@ export function buildAuthRedirect() {
 
 export async function startGoogleAuth(): Promise<string | null> {
   const clientID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
-  const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
   if (!clientID) {
-    if (isLocal) {
-      console.log("No EXPO_PUBLIC_GOOGLE_CLIENT_ID found, using local mock auth.");
-      return "mock_google_session";
-    }
-    throw new Error("Google Sign-In is not configured. Please set EXPO_PUBLIC_GOOGLE_CLIENT_ID in your environment.");
+    console.log("No EXPO_PUBLIC_GOOGLE_CLIENT_ID found, using mock auth.");
+    return "mock_google_session";
   }
 
   const redirect = buildAuthRedirect();

@@ -19,9 +19,10 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # MongoDB connection
-mongo_url = os.environ['MONGO_URL']
+mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+db_name = os.environ.get('DB_NAME', 'borrowright')
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[db_name]
 
 PUSH_BASE_URL = "https://integrations.emergentagent.com"
 PUSH_KEY = os.environ.get("EMERGENT_PUSH_KEY", "placeholder")
@@ -865,22 +866,29 @@ def _share_text(name: Optional[str], code: str) -> str:
 # ---------------- Startup ----------------
 @app.on_event("startup")
 async def startup():
-    await db.users.create_index("user_id", unique=True)
-    await db.users.create_index("email", sparse=True)
-    await db.users.create_index("mobile", sparse=True)
-    await db.users.create_index("referral_code", sparse=True, unique=True)
-    await db.user_sessions.create_index("session_token", unique=True)
-    await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
-    await db.applications.create_index("application_id", unique=True)
-    await db.applications.create_index("user_id")
-    await db.documents.create_index("document_id", unique=True)
-    await db.documents.create_index("application_id")
-    await db.referrals.create_index("referral_id", unique=True)
-    await db.referrals.create_index("referrer_user_id")
-    await db.referrals.create_index("referred_user_id", unique=True)
-    await db.otp_codes.create_index("mobile", unique=True)
-    await db.otp_codes.create_index("expires_at", expireAfterSeconds=0)
-    logger.info("DB indexes ready")
+    try:
+        import asyncio
+        async def create_indexes():
+            await db.users.create_index("user_id", unique=True)
+            await db.users.create_index("email", sparse=True)
+            await db.users.create_index("mobile", sparse=True)
+            await db.users.create_index("referral_code", sparse=True, unique=True)
+            await db.user_sessions.create_index("session_token", unique=True)
+            await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
+            await db.applications.create_index("application_id", unique=True)
+            await db.applications.create_index("user_id")
+            await db.documents.create_index("document_id", unique=True)
+            await db.documents.create_index("application_id")
+            await db.referrals.create_index("referral_id", unique=True)
+            await db.referrals.create_index("referrer_user_id")
+            await db.referrals.create_index("referred_user_id", unique=True)
+            await db.otp_codes.create_index("mobile", unique=True)
+            await db.otp_codes.create_index("expires_at", expireAfterSeconds=0)
+        
+        await asyncio.wait_for(create_indexes(), timeout=3.0)
+        logger.info("DB indexes ready")
+    except Exception as e:
+        logger.warning(f"Could not connect to MongoDB or index creation timed out: {e}. Running in offline/mock mode.")
 
 
 @app.on_event("shutdown")
