@@ -1,7 +1,19 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
-const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+let BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+
+if (Platform.OS === "web") {
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      BASE = "http://localhost:8000";
+    } else {
+      BASE = ""; // Relative paths for production Vercel deployment
+    }
+  }
+}
+
 const TOKEN_KEY = "borrowright_session_token";
 
 async function getToken(): Promise<string | null> {

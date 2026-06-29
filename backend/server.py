@@ -18,6 +18,104 @@ from datetime import datetime, timezone, timedelta
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+class MockCursor:
+    def __init__(self, data):
+        self.data = data
+
+    def sort(self, key, direction=-1):
+        try:
+            self.data.sort(key=lambda x: x.get(key) or datetime.min, reverse=(direction == -1))
+        except Exception:
+            pass
+        return self
+
+    async def to_list(self, length=100):
+        return self.data[:length]
+
+class MockCollection:
+    def __init__(self, name):
+        self.name = name
+        self.data = []
+
+    async def find_one(self, query, projection=None):
+        for doc in self.data:
+            match = True
+            for k, v in query.items():
+                if doc.get(k) != v:
+                    match = False
+                    break
+            if match:
+                return dict(doc)
+        return None
+
+    async def insert_one(self, doc):
+        self.data.append(dict(doc))
+        return self
+
+    async def update_one(self, query, update, upsert=False):
+        doc = await self.find_one(query)
+        if not doc:
+            if upsert:
+                new_doc = dict(query)
+                if "$set" in update:
+                    new_doc.update(update["$set"])
+                self.data.append(new_doc)
+            return self
+        
+        if "$set" in update:
+            for k, v in update["$set"].items():
+                doc[k] = v
+        if "$inc" in update:
+            for k, v in update["$inc"].items():
+                doc[k] = doc.get(k, 0) + v
+        
+        for i, item in enumerate(self.data):
+            match = True
+            for k, v in query.items():
+                if item.get(k) != v:
+                    match = False
+                    break
+            if match:
+                self.data[i] = doc
+                break
+        return self
+
+    async def delete_one(self, query):
+        for i, item in enumerate(self.data):
+            match = True
+            for k, v in query.items():
+                if item.get(k) != v:
+                    match = False
+                    break
+            if match:
+                self.data.pop(i)
+                break
+        return self
+
+    def find(self, query, projection=None):
+        matched = []
+        for doc in self.data:
+            match = True
+            for k, v in query.items():
+                if doc.get(k) != v:
+                    match = False
+                    break
+            if match:
+                matched.append(dict(doc))
+        return MockCursor(matched)
+
+    async def create_index(self, *args, **kwargs):
+        pass
+
+class MockDB:
+    def __init__(self):
+        self.collections = {}
+
+    def __getattr__(self, name):
+        if name not in self.collections:
+            self.collections[name] = MockCollection(name)
+        return self.collections[name]
+
 # MongoDB connection
 mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
 db_name = os.environ.get('DB_NAME', 'borrowright')
@@ -888,7 +986,9 @@ async def startup():
         await asyncio.wait_for(create_indexes(), timeout=3.0)
         logger.info("DB indexes ready")
     except Exception as e:
-        logger.warning(f"Could not connect to MongoDB or index creation timed out: {e}. Running in offline/mock mode.")
+        logger.warning(f"Could not connect to MongoDB or index creation timed out: {e}. Switching to Mock In-Memory Database.")
+        global db
+        db = MockDB()
 
 
 @app.on_event("shutdown")
