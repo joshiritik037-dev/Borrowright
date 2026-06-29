@@ -17,10 +17,15 @@ export default function Otp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resendIn, setResendIn] = useState(30);
+  const [provider, setProvider] = useState<string>("msg91");
   const refs = useRef<(TextInput | null)[]>([]);
 
   useEffect(() => {
-    api.post("/auth/otp/request", { mobile }).catch(() => {});
+    api.post<{ provider: string }>("/auth/otp/request", { mobile })
+      .then((res) => {
+        if (res && res.provider) setProvider(res.provider);
+      })
+      .catch(() => {});
     const t = setInterval(() => setResendIn((s) => (s > 0 ? s - 1 : 0)), 1000);
     return () => clearInterval(t);
   }, [mobile]);
@@ -58,10 +63,12 @@ export default function Otp() {
           <Text style={styles.title}>Verify your number</Text>
           <Text style={styles.subtitle}>We sent a 6-digit code to <Text style={{ color: colors.onSurface, fontWeight: "700" }}>{mobile}</Text></Text>
 
-          <View style={styles.devHint}>
-            <Ionicons name="information-circle" size={16} color={colors.brandPrimary} />
-            <Text style={styles.devHintText}>Dev mode — any 6-digit code works (e.g., 123456)</Text>
-          </View>
+          {provider === "dev" && (
+            <View style={styles.devHint}>
+              <Ionicons name="information-circle" size={16} color={colors.brandPrimary} />
+              <Text style={styles.devHintText}>Dev mode — any 6-digit code works (e.g., 123456)</Text>
+            </View>
+          )}
 
           <View style={styles.otpRow}>
             {code.map((c, i) => (
