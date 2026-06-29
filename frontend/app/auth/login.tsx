@@ -16,12 +16,29 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  // Web cold-start: parse session_id
+  // Web cold-start: parse session_id or access_token
   useEffect(() => {
     if (Platform.OS !== "web") return;
     if (typeof window === "undefined") return;
     const params = window.location.hash || window.location.search;
-    const m = params.match(/session_id=([^&]+)/);
+    
+    // Check for access_token first (direct Google OAuth2)
+    const tokMatch = params.match(/[#?&]access_token=([^&]+)/);
+    if (tokMatch && tokMatch[1]) {
+      const token = decodeURIComponent(tokMatch[1]);
+      window.history.replaceState(null, "", window.location.pathname);
+      (async () => {
+        try {
+          await signInWithGoogleSession(token);
+        } catch (e: any) {
+          setError(e?.message || "Google sign-in failed");
+        }
+      })();
+      return;
+    }
+
+    // Check for session_id (legacy/emergent flow)
+    const m = params.match(/[#?&]session_id=([^&]+)/);
     if (m && m[1]) {
       const sid = decodeURIComponent(m[1]);
       window.history.replaceState(null, "", window.location.pathname);

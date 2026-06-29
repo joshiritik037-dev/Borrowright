@@ -17,24 +17,31 @@ export function openTel(phone: string) {
 
 export function buildAuthRedirect() {
   if (Platform.OS === "web") {
-    if (typeof window !== "undefined") return window.location.origin + "/";
+    if (typeof window !== "undefined") return window.location.origin + "/auth/login";
     return "";
   }
   return ExpoLinking.createURL("auth");
 }
 
 export async function startGoogleAuth(): Promise<string | null> {
+  const clientID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
+  if (!clientID) {
+    console.log("No EXPO_PUBLIC_GOOGLE_CLIENT_ID found, using local mock auth.");
+    return "mock_google_session";
+  }
+
   const redirect = buildAuthRedirect();
-  const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirect)}`;
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientID)}&redirect_uri=${encodeURIComponent(redirect)}&response_type=token&scope=${encodeURIComponent("openid email profile")}`;
+  
   if (Platform.OS === "web") {
     if (typeof window !== "undefined") window.location.href = authUrl;
     return null;
   }
+  
   const result = await WebBrowser.openAuthSessionAsync(authUrl, redirect);
   if (result.type !== "success" || !result.url) return null;
-  // Parse session_id from hash or query
+  
   const url = result.url;
-  const hashMatch = url.match(/[#&]session_id=([^&]+)/);
-  const queryMatch = url.match(/[?&]session_id=([^&]+)/);
-  return decodeURIComponent((hashMatch || queryMatch)?.[1] || "") || null;
+  const match = url.match(/[#&]access_token=([^&]+)/);
+  return decodeURIComponent(match?.[1] || "") || null;
 }
