@@ -117,10 +117,27 @@ class MockDB:
         return self.collections[name]
 
 # MongoDB connection
-mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+mongo_url = os.environ.get('MONGO_URL')
 db_name = os.environ.get('DB_NAME', 'borrowright')
-client = AsyncIOMotorClient(mongo_url)
-db = client[db_name]
+
+db_online = False
+if mongo_url:
+    try:
+        from pymongo import MongoClient
+        sync_client = MongoClient(mongo_url, serverSelectionTimeoutMS=1000)
+        sync_client.admin.command('ping')
+        db_online = True
+        sync_client.close()
+    except Exception as e:
+        logger.warning(f"MongoDB ping failed: {e}. Swapping to MockDB.")
+        db_online = False
+
+if db_online:
+    client = AsyncIOMotorClient(mongo_url)
+    db = client[db_name]
+else:
+    db = MockDB()
+    logger.info("Using Mock In-Memory Database fallback.")
 
 PUSH_BASE_URL = "https://integrations.emergentagent.com"
 PUSH_KEY = os.environ.get("EMERGENT_PUSH_KEY", "placeholder")
