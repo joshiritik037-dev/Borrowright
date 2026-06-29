@@ -18,6 +18,10 @@ from datetime import datetime, timezone, timedelta
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 class MockCursor:
     def __init__(self, data):
         self.data = data
@@ -160,10 +164,6 @@ push_client = httpx.AsyncClient(
     headers={"X-Push-Key": PUSH_KEY},
     timeout=10.0,
 )
-
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
 
 # ----------------------------- Models -----------------------------
