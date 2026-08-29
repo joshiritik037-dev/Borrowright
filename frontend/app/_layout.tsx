@@ -65,10 +65,9 @@ function RootGate() {
 
     if (!user) {
       if (inProtected) router.replace("/welcome");
-    } else if (!user.onboarded && first !== "onboarding") {
-      // newly verified user (auth/otp) OR landing on tabs without onboarding → route to /onboarding
+    } else if (!user.onboarded && first !== "onboarding" && first !== "promise") {
       router.replace("/onboarding");
-    } else if (user.onboarded && (inAuth || first === "welcome" || first === "")) {
+    } else if (user.onboarded && (inAuth || first === "welcome" || first === "" || first === "onboarding")) {
       router.replace("/(tabs)");
     }
   }, [user, loading, segments, router]);

@@ -20,15 +20,21 @@ export default function Promise() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={["top", "bottom"]}>
       <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxxl }} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.back} testID="promise-back"><Ionicons name="chevron-back" size={22} color={colors.onSurface} /></Pressable>
+          <Pressable onPress={() => router.replace("/(tabs)")} style={styles.back} testID="promise-back">
+            <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
+          </Pressable>
+          <Pressable onPress={() => router.replace("/(tabs)")} style={styles.skipPill} testID="promise-skip-top">
+            <Text style={styles.skipPillText}>Skip</Text>
+            <Ionicons name="arrow-forward" size={14} color={colors.brandPrimary} />
+          </Pressable>
         </View>
 
         <ImageBackground source={{ uri: "https://images.unsplash.com/photo-1649861742672-20152f77c1f5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzV8MHwxfHNlYXJjaHwxfHxkYXJrJTIwZ3JlZW4lMjBsdXh1cnklMjBhYnN0cmFjdCUyMGdyYWRpZW50JTIwdGV4dHVyZSUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzgyNTc3MTExfDA&ixlib=rb-4.1.0&q=85" }} style={styles.hero} imageStyle={{ borderRadius: radii.lg }}>
           <LinearGradient colors={["rgba(10,59,42,0.45)", "rgba(10,59,42,0.95)"]} style={[StyleSheet.absoluteFill, { borderRadius: radii.lg }]} />
           <View style={styles.heroInner}>
-            <View style={styles.badge}><Ionicons name="gift" size={12} color={colors.warning} /><Text style={styles.badgeText}>OUR PROMISE</Text></View>
+            <View style={styles.badge}><Ionicons name="gift" size={12} color={colors.warning} /><Text style={styles.badgeText}>EXCLUSIVE OFFER</Text></View>
             <Text style={styles.heroTitle}>Min. 15% Cash Refund</Text>
-            <Text style={styles.heroSub}>If we save costs during your loan process, we return at least 15% of the total cost involved as a cash refund — making your borrowing rewarding.</Text>
+            <Text style={styles.heroSub}>If we save costs during your loan process, we return at least 15% of the processing fees involved as a cash refund — making your borrowing rewarding.</Text>
           </View>
         </ImageBackground>
 
@@ -53,7 +59,7 @@ export default function Promise() {
               <Ionicons name="arrow-forward" size={20} color={colors.onSurfaceMuted} />
               <View style={styles.compareCol}>
                 <Text style={styles.compareGood}>{data?.cost_comparison?.ours}</Text>
-                <Text style={styles.compareSub}>With BorrowRight</Text>
+                <Text style={styles.compareSub}>With TrueBorrow</Text>
               </View>
             </View>
           </Card>
@@ -83,8 +89,9 @@ export default function Promise() {
             ))}
           </View>
 
-          <View style={{ marginTop: spacing.xl }}>
+          <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
             <Button title="Talk to Your RM on WhatsApp" variant="whatsapp" onPress={() => openWhatsApp()} icon={<Ionicons name="logo-whatsapp" size={18} color="#fff" />} testID="promise-whatsapp-button" />
+            <Button title="Skip & Continue to Home" variant="outline" onPress={() => router.replace("/(tabs)")} icon={<Ionicons name="arrow-forward" size={18} color={colors.brandPrimary} />} testID="promise-skip-bottom" />
           </View>
         </View>
       </ScrollView>
@@ -93,8 +100,10 @@ export default function Promise() {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.md },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.md },
   back: { width: 40, height: 40, borderRadius: radii.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceTertiary },
+  skipPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, height: 38, borderRadius: radii.pill, backgroundColor: colors.brandTertiary, borderWidth: 1, borderColor: "rgba(10,59,42,0.15)" },
+  skipPillText: { color: colors.brandPrimary, fontWeight: "700", fontSize: fontSize.sm },
   hero: { marginHorizontal: spacing.xl, height: 220, borderRadius: radii.lg, overflow: "hidden" },
   heroInner: { flex: 1, padding: spacing.lg, justifyContent: "flex-end" },
   badge: { flexDirection: "row", alignSelf: "flex-start", gap: 6, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: "rgba(212,175,55,0.20)", borderRadius: radii.pill, marginBottom: spacing.sm },

@@ -1,23 +1,23 @@
 {
   "expo": {
-    "name": "BorrowRight",
-    "slug": "borrowright",
+    "name": "TrueBorrow",
+    "slug": "trueborrow",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "borrowright",
+    "scheme": "trueborrow",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.splendid.borrowright",
+      "bundleIdentifier": "com.splendid.trueborrow",
       "infoPlist": {
         "NSCameraUsageDescription": "Capture documents for your loan application",
         "NSPhotoLibraryUsageDescription": "Upload documents from your gallery"
       }
     },
     "android": {
-      "package": "com.splendid.borrowright",
+      "package": "com.splendid.trueborrow",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0A3B2A"

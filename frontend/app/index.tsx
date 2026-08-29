@@ -26,7 +26,7 @@ export default function Index() {
           <Ionicons name="shield-checkmark" size={44} color="#fff" />
         </View>
         <Text style={styles.brand}>Splendid Consultants</Text>
-        <Text style={styles.product}>BorrowRight</Text>
+        <Text style={styles.product}>TrueBorrow</Text>
         <Text style={styles.tagline}>Making Retail Finance Transparent, Fast & Affordable</Text>
       </View>
       <View style={styles.bottom}>

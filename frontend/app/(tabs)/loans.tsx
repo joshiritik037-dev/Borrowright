@@ -12,7 +12,7 @@ type LoanType = { id: string; name: string; icon: string; desc: string };
 
 const ICONS: Record<string, any> = {
   home: "home", lap: "business", car: "car-sport", personal: "wallet",
-  business: "briefcase", construction: "construct", working_capital: "trending-up", other: "ellipsis-horizontal-circle",
+  business: "briefcase", other: "ellipsis-horizontal-circle",
 };
 
 export default function Loans() {
@@ -25,7 +25,7 @@ export default function Loans() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={["top"]}>
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xxxl }} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Explore Loans</Text>
-        <Text style={styles.sub}>Pick a category to apply, calculate, or compare banks.</Text>
+        <Text style={styles.sub}>Pick a category to apply or calculate EMI.</Text>
 
         <View style={styles.grid}>
           {types.map((t) => (
@@ -57,22 +57,6 @@ export default function Loans() {
             </View>
             <View style={{ height: spacing.md }} />
             <Button title="Open Calculator" testID="open-emi-calculator" onPress={() => router.push("/emi-calculator")} />
-          </Card>
-        </View>
-
-        <View style={{ marginTop: spacing.lg }}>
-          <Card>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-              <View style={[styles.iconWrap, { backgroundColor: colors.brandTertiary }]}>
-                <Ionicons name="git-compare" size={22} color={colors.brandPrimary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.calcTitle}>Compare Banks</Text>
-                <Text style={styles.desc}>See rates, fees & EMI side-by-side</Text>
-              </View>
-            </View>
-            <View style={{ height: spacing.md }} />
-            <Button title="View Comparison" variant="outline" testID="open-bank-compare" onPress={() => router.push("/bank-compare")} />
           </Card>
         </View>
       </ScrollView>

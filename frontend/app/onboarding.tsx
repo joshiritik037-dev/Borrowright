@@ -8,8 +8,6 @@ import { Input } from "@/src/components/Input";
 import { colors, fontSize, radii, spacing } from "@/src/theme";
 import { useAuth } from "@/src/contexts/AuthContext";
 
-const GENDERS = ["Male", "Female", "Other"];
-const MARITAL = ["Single", "Married", "Other"];
 const EMPLOYMENT = ["Salaried", "Self-Employed", "Business Owner", "Other"];
 
 export default function Onboarding() {
@@ -20,16 +18,12 @@ export default function Onboarding() {
     email: user?.email || "",
     city: user?.city || "",
     state: user?.state || "",
-    dob: user?.dob || "",
-    gender: user?.gender || "",
     pan: user?.pan || "",
     aadhaar: user?.aadhaar || "",
     monthly_income: user?.monthly_income?.toString() || "",
     company_name: user?.company_name || "",
-    marital_status: user?.marital_status || "",
     employment_type: user?.employment_type || "",
     existing_loan: user?.existing_loan || false,
-    cibil_score: user?.cibil_score?.toString() || "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +32,7 @@ export default function Onboarding() {
 
   const submit = async () => {
     setError(null);
-    if (!form.name || !form.city || !form.state || !form.dob || !form.pan) {
+    if (!form.name || !form.city || !form.state || !form.pan) {
       setError("Please fill all required fields"); return;
     }
     setSaving(true);
@@ -49,9 +43,8 @@ export default function Onboarding() {
         cleaned[k] = v;
       });
       if (cleaned.monthly_income) cleaned.monthly_income = Number(cleaned.monthly_income);
-      if (cleaned.cibil_score) cleaned.cibil_score = Number(cleaned.cibil_score);
       await updateProfile(cleaned);
-      router.replace("/(tabs)");
+      router.replace({ pathname: "/(tabs)", params: { show_offer: "true" } });
     } catch (e: any) {
       setError(e?.message || "Save failed. Please check your inputs and try again.");
     } finally {
@@ -83,12 +76,6 @@ export default function Onboarding() {
               <View style={{ flex: 1 }}><Input label="City *" testID="ob-city" value={form.city} onChangeText={(v) => set("city", v)} placeholder="Mumbai" /></View>
               <View style={{ flex: 1 }}><Input label="State *" testID="ob-state" value={form.state} onChangeText={(v) => set("state", v)} placeholder="MH" /></View>
             </View>
-            <Input label="Date of Birth *" testID="ob-dob" value={form.dob} onChangeText={(v) => set("dob", v)} placeholder="DD/MM/YYYY" />
-
-            <Text style={styles.label}>Gender</Text>
-            <View style={styles.chipRow}>
-              {GENDERS.map((g) => <Chip key={g} label={g} active={form.gender === g} onPress={() => set("gender", g)} testID={`ob-gender-${g.toLowerCase()}`} />)}
-            </View>
 
             <Input label="PAN *" testID="ob-pan" value={form.pan} onChangeText={(v) => set("pan", v.toUpperCase())} placeholder="ABCDE1234F" maxLength={10} autoCapitalize="characters" />
             <Input label="Aadhaar (last 4)" testID="ob-aadhaar" value={form.aadhaar} onChangeText={(v) => set("aadhaar", v.replace(/\D/g, "").slice(0, 12))} placeholder="XXXX-XXXX-XXXX" keyboardType="number-pad" />
@@ -100,13 +87,6 @@ export default function Onboarding() {
             </View>
 
             <Input label="Company / Business Name" testID="ob-company" value={form.company_name} onChangeText={(v) => set("company_name", v)} placeholder="Optional" />
-
-            <Text style={styles.label}>Marital Status</Text>
-            <View style={styles.chipRow}>
-              {MARITAL.map((g) => <Chip key={g} label={g} active={form.marital_status === g} onPress={() => set("marital_status", g)} testID={`ob-marital-${g.toLowerCase()}`} />)}
-            </View>
-
-            <Input label="CIBIL Score (optional)" testID="ob-cibil" value={form.cibil_score} onChangeText={(v) => set("cibil_score", v.replace(/\D/g, "").slice(0, 3))} placeholder="750" keyboardType="number-pad" />
           </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}

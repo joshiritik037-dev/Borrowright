@@ -1,5 +1,5 @@
 @echo off
-echo Starting BorrowRight Web App...
+echo Starting TrueBorrow Web App...
 cd frontend
 npm run web
 pause

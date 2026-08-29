@@ -1,5 +1,5 @@
 @echo off
-echo Starting BorrowRight Backend Server...
+echo Starting TrueBorrow Backend Server...
 cd backend
 
 :: Check if standard python has uvicorn

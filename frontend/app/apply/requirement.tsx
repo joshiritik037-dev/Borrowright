@@ -8,8 +8,8 @@ import { Button } from "@/src/components/Button";
 import { colors, fontSize, radii, spacing } from "@/src/theme";
 import { api } from "@/src/lib/api";
 
-const PURPOSES = ["Purchase", "Construction", "Renovation", "Business Expansion", "Working Capital", "Balance Transfer"];
-const PROPTYPES = ["Residential", "Commercial", "Industrial", "Agricultural"];
+import { openWhatsApp } from "@/src/lib/links";
+
 const TIMELINE = [["7d", "Within 7 Days"], ["15d", "15 Days"], ["30d", "30 Days"], ["60d", "60 Days"]];
 const CONTACT_TIMES = ["Morning", "Afternoon", "Evening"];
 const CHANNELS = ["Phone", "WhatsApp", "Email"];
@@ -19,7 +19,7 @@ export default function Requirement() {
   const router = useRouter();
   const [f, setF] = useState<any>({
     loan_amount: "", purpose: "", property_value: "", property_address: "", property_type: "",
-    existing_loan: false, current_emi: "", preferred_bank: "", loan_required_by: "", remarks: "",
+    existing_loan: false, loan_required_by: "", remarks: "",
     full_address: "", pin_code: "", city: "", state: "", whatsapp_number: "", alternate_mobile: "", email: "",
     preferred_contact_time: "", preferred_communication: "",
   });
@@ -45,9 +45,13 @@ export default function Requirement() {
       });
       if (cleaned.loan_amount) cleaned.loan_amount = Number(cleaned.loan_amount);
       if (cleaned.property_value) cleaned.property_value = Number(cleaned.property_value);
-      if (cleaned.current_emi) cleaned.current_emi = Number(cleaned.current_emi);
       const app = await api.post<any>("/applications", cleaned);
-      router.push({ pathname: "/apply/documents", params: { application_id: app.application_id } });
+
+      const msg = `Hello TrueBorrow Team 👋\n\nI have submitted my loan requirement:\n• Loan Type: ${(name || loan_type || "Loan").replace("_", " ").toUpperCase()}\n• Loan Amount Required: ₹${f.loan_amount}\n• Purpose: ${f.purpose}\n${f.property_value ? `• Property Value: ₹${f.property_value}\n` : ""}${f.property_type ? `• Property Type: ${f.property_type}\n` : ""}• Location: ${f.city}, ${f.state}\n• Application ID: ${app.application_id}\n\nPlease guide me with the processing steps!`;
+
+      openWhatsApp(msg);
+
+      router.push({ pathname: "/apply/success", params: { application_id: app.application_id } });
     } catch (e: any) {
       setError(e?.message || "Could not save");
     } finally { setSaving(false); }
@@ -58,26 +62,16 @@ export default function Requirement() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.back} testID="req-back"><Ionicons name="chevron-back" size={22} color={colors.onSurface} /></Pressable>
-          <View style={styles.progressBar}><View style={[styles.progressFill, { width: "33%" }]} /></View>
-          <Text style={styles.step}>Step 1 of 3 · {name || loan_type}</Text>
+          <View style={styles.progressBar}><View style={[styles.progressFill, { width: "100%" }]} /></View>
+          <Text style={styles.step}>Submit Requirement · {name || loan_type}</Text>
         </View>
         <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Text style={styles.title}>Loan Requirement</Text>
           <Input label="Loan Amount Required *" testID="req-amount" value={f.loan_amount} onChangeText={(v) => set("loan_amount", v.replace(/\D/g, ""))} placeholder="e.g., 5000000" keyboardType="number-pad" />
 
-          <Text style={styles.label}>Purpose *</Text>
-          <View style={styles.chipRow}>{PURPOSES.map((p) => <Chip key={p} label={p} active={f.purpose === p} onPress={() => set("purpose", p)} testID={`req-purpose-${p.replace(/\W/g,'-').toLowerCase()}`} />)}</View>
+          <Input label="Purpose *" testID="req-purpose" value={f.purpose} onChangeText={(v) => set("purpose", v)} placeholder="e.g. Home purchase, renovation, business expansion..." />
 
-          <View style={{ flexDirection: "row", gap: spacing.md }}>
-            <View style={{ flex: 1 }}><Input label="Property Value" testID="req-propval" value={f.property_value} onChangeText={(v) => set("property_value", v.replace(/\D/g, ""))} placeholder="₹" keyboardType="number-pad" /></View>
-            <View style={{ flex: 1 }}><Input label="Current EMI" testID="req-emi" value={f.current_emi} onChangeText={(v) => set("current_emi", v.replace(/\D/g, ""))} placeholder="₹" keyboardType="number-pad" /></View>
-          </View>
-          <Input label="Property Address" testID="req-propaddr" value={f.property_address} onChangeText={(v) => set("property_address", v)} placeholder="Full property address" />
-
-          <Text style={styles.label}>Property Type</Text>
-          <View style={styles.chipRow}>{PROPTYPES.map((p) => <Chip key={p} label={p} active={f.property_type === p} onPress={() => set("property_type", p)} testID={`req-proptype-${p.toLowerCase()}`} />)}</View>
-
-          <Input label="Preferred Bank" testID="req-bank" value={f.preferred_bank} onChangeText={(v) => set("preferred_bank", v)} placeholder="HDFC / SBI / Any" />
+          <Input label="Property Value" testID="req-propval" value={f.property_value} onChangeText={(v) => set("property_value", v.replace(/\D/g, ""))} placeholder="₹" keyboardType="number-pad" />
 
           <Text style={styles.label}>Loan Required By</Text>
           <View style={styles.chipRow}>{TIMELINE.map(([k, l]) => <Chip key={k} label={l} active={f.loan_required_by === k} onPress={() => set("loan_required_by", k)} testID={`req-timeline-${k}`} />)}</View>
@@ -105,7 +99,7 @@ export default function Requirement() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </ScrollView>
         <View style={styles.ctaWrap}>
-          <Button title="Continue to Documents" loading={saving} onPress={submit} testID="req-continue-button" />
+          <Button title="Send Requirement on WhatsApp" variant="whatsapp" icon={<Ionicons name="logo-whatsapp" size={18} color="#fff" />} loading={saving} onPress={submit} testID="req-continue-button" />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

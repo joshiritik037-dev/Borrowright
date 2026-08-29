@@ -28,12 +28,12 @@ export type User = {
 type AuthCtx = {
   user: User | null;
   loading: boolean;
-  signInWithOtp: (mobile: string, code: string, extra?: { name?: string; email?: string; referral_code?: string }) => Promise<User>;
-  signInWithGoogleSession: (session_id: string) => Promise<User>;
+  startSession: (name: string, mobile: string, extra?: { referral_code?: string }) => Promise<User>;
   refresh: () => Promise<User | null>;
   updateProfile: (patch: Partial<User>) => Promise<User>;
   signOut: () => Promise<void>;
 };
+
 
 const Ctx = createContext<AuthCtx | null>(null);
 
@@ -59,15 +59,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (async () => { await refresh(); setLoading(false); })();
   }, [refresh]);
 
-  const signInWithOtp = async (mobile: string, code: string, extra?: { name?: string; email?: string; referral_code?: string }) => {
-    const res = await api.post<{ session_token: string; user: User }>("/auth/otp/verify", { mobile, code, ...extra });
-    await setToken(res.session_token);
-    setUser(res.user);
-    return res.user;
-  };
-
-  const signInWithGoogleSession = async (session_id: string) => {
-    const res = await api.post<{ session_token: string; user: User }>("/auth/google/session", { session_id });
+  const startSession = async (name: string, mobile: string, extra?: { referral_code?: string }) => {
+    const res = await api.post<{ session_token: string; user: User }>("/auth/start", { name, mobile, ...extra });
     await setToken(res.session_token);
     setUser(res.user);
     return res.user;
@@ -86,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={{ user, loading, signInWithOtp, signInWithGoogleSession, refresh, updateProfile, signOut }}>
+    <Ctx.Provider value={{ user, loading, startSession, refresh, updateProfile, signOut }}>
       {children}
     </Ctx.Provider>
   );

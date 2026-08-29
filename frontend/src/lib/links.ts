@@ -5,9 +5,10 @@ import * as ExpoLinking from "expo-linking";
 
 export const RM_WHATSAPP = "919826739349"; // without '+'
 
-export function openWhatsApp(message?: string) {
-  const text = message ? encodeURIComponent(message) : "Hi%20Splendid%20Consultants%2C%20I%20would%20like%20to%20share%20my%20loan%20documents.";
-  const url = `https://wa.me/${RM_WHATSAPP}?text=${text}`;
+export function openWhatsApp(message?: string, phone?: string) {
+  const targetPhone = (phone || RM_WHATSAPP).replace(/\D/g, "");
+  const text = message ? encodeURIComponent(message) : encodeURIComponent("Hi TrueBorrow Team!");
+  const url = `https://wa.me/${targetPhone}?text=${text}`;
   Linking.openURL(url).catch(() => {});
 }
 

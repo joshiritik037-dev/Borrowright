@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -6,67 +6,37 @@ import { Ionicons } from "@expo/vector-icons";
 import { Button } from "@/src/components/Button";
 import { Input } from "@/src/components/Input";
 import { colors, fontSize, radii, spacing } from "@/src/theme";
-import { startGoogleAuth } from "@/src/lib/links";
 import { useAuth } from "@/src/contexts/AuthContext";
 
 export default function Login() {
   const router = useRouter();
-  const { signInWithGoogleSession } = useAuth();
+  const { startSession } = useAuth();
+  
+  const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // Web cold-start: parse session_id or access_token
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    if (typeof window === "undefined") return;
-    const params = window.location.hash || window.location.search;
-    
-    // Check for access_token first (direct Google OAuth2)
-    const tokMatch = params.match(/[#?&]access_token=([^&]+)/);
-    if (tokMatch && tokMatch[1]) {
-      const token = decodeURIComponent(tokMatch[1]);
-      window.history.replaceState(null, "", window.location.pathname);
-      (async () => {
-        try {
-          await signInWithGoogleSession(token);
-        } catch (e: any) {
-          setError(e?.message || "Google sign-in failed");
-        }
-      })();
-      return;
-    }
-
-    // Check for session_id (legacy/emergent flow)
-    const m = params.match(/[#?&]session_id=([^&]+)/);
-    if (m && m[1]) {
-      const sid = decodeURIComponent(m[1]);
-      window.history.replaceState(null, "", window.location.pathname);
-      (async () => {
-        try { await signInWithGoogleSession(sid); } catch (e: any) { setError(e?.message || "Google sign-in failed"); }
-      })();
-    }
-  }, [signInWithGoogleSession]);
-
-  const onContinue = () => {
+  const onContinue = async () => {
     setError(null);
     if (!/^\d{10}$/.test(mobile)) {
-      setError("Enter a valid 10-digit mobile number");
+      setError("Please enter a valid 10-digit mobile number");
       return;
     }
-    router.push({ pathname: "/auth/otp", params: { mobile: `+91${mobile}` } });
-  };
-
-  const onGoogle = async () => {
-    setGoogleLoading(true);
-    setError(null);
+    
+    setLoading(true);
     try {
-      const sid = await startGoogleAuth();
-      if (sid) await signInWithGoogleSession(sid);
+      await startSession(name.trim() || "User", mobile);
+      // Let root layout logic handle redirection directly to /(tabs)
     } catch (e: any) {
-      setError(e?.message || "Google sign-in failed");
+      const msg = e?.message || "";
+      if (msg === "Failed to fetch" || msg.includes("Network")) {
+        setError("Cannot connect to server. Please make sure the backend is running (run-backend.bat).");
+      } else {
+        setError(e?.response?.data?.detail || msg || "Failed to start session");
+      }
     } finally {
-      setGoogleLoading(false);
+      setLoading(false);
     }
   };
 
@@ -78,11 +48,21 @@ export default function Login() {
             <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
           </Pressable>
 
-          <Text style={styles.eyebrow}>Welcome to BorrowRight</Text>
+          <Text style={styles.eyebrow}>Welcome to TrueBorrow</Text>
           <Text style={styles.title}>Let's get you started</Text>
-          <Text style={styles.subtitle}>We'll send a 6-digit code to verify your number.</Text>
+          <Text style={styles.subtitle}>Enter your mobile number to log in. All your saved profile details and applications are linked to your mobile number.</Text>
 
           <View style={{ marginTop: spacing.xl }}>
+            <Text style={styles.label}>Your Name (Optional)</Text>
+            <View style={{ marginBottom: spacing.md }}>
+              <Input
+                testID="login-name-input"
+                placeholder="e.g. Rahul Sharma"
+                value={name}
+                onChangeText={setName}
+              />
+            </View>
+
             <Text style={styles.label}>Mobile Number</Text>
             <View style={styles.mobileRow}>
               <View style={styles.cc}><Text style={styles.ccText}>+91</Text></View>
@@ -97,24 +77,10 @@ export default function Login() {
                 />
               </View>
             </View>
+
             {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Button title="Continue" onPress={onContinue} testID="login-continue-button" />
+            <Button title="Continue" onPress={onContinue} loading={loading} testID="login-continue-button" />
           </View>
-
-          <View style={styles.divider}>
-            <View style={styles.line} />
-            <Text style={styles.orText}>or continue with</Text>
-            <View style={styles.line} />
-          </View>
-
-          <Button
-            title="Continue with Google"
-            variant="outline"
-            loading={googleLoading}
-            onPress={onGoogle}
-            testID="login-google-button"
-            icon={<Ionicons name="logo-google" size={18} color={colors.brandPrimary} />}
-          />
 
           <Text style={styles.terms}>
             By continuing, you agree to our <Text style={styles.link}>Terms</Text> and <Text style={styles.link}>Privacy Policy</Text>.
@@ -133,13 +99,10 @@ const styles = StyleSheet.create({
   title: { color: colors.onSurface, fontSize: 30, fontWeight: "800", letterSpacing: -0.5, marginTop: spacing.sm },
   subtitle: { color: colors.onSurfaceSubtle, fontSize: fontSize.md, marginTop: spacing.sm, lineHeight: 22 },
   label: { fontSize: fontSize.sm, color: colors.onSurfaceSubtle, marginBottom: spacing.sm, fontWeight: "600", letterSpacing: 0.3, textTransform: "uppercase" },
-  mobileRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm },
+  mobileRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm, marginBottom: spacing.md },
   cc: { height: 56, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.lg, justifyContent: "center", backgroundColor: colors.surfaceSecondary },
   ccText: { fontSize: fontSize.lg, color: colors.onSurface, fontWeight: "700" },
   error: { color: colors.error, fontSize: fontSize.sm, marginBottom: spacing.md },
-  divider: { flexDirection: "row", alignItems: "center", marginVertical: spacing.xl, gap: spacing.md },
-  line: { flex: 1, height: 1, backgroundColor: colors.border },
-  orText: { fontSize: fontSize.sm, color: colors.onSurfaceMuted },
   terms: { fontSize: fontSize.sm, color: colors.onSurfaceMuted, textAlign: "center", marginTop: spacing.xl, lineHeight: 20 },
   link: { color: colors.brandPrimary, fontWeight: "600" },
 });

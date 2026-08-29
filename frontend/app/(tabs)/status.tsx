@@ -9,28 +9,26 @@ import { colors, fontSize, radii, spacing } from "@/src/theme";
 import { api } from "@/src/lib/api";
 import { inrShort } from "@/src/lib/finance";
 
-type Application = { application_id: string; loan_type: string; loan_amount?: number; status: string; stage: string };
-type TimelineItem = { key: string; label: string; completed: boolean; active: boolean };
+type Application = {
+  application_id: string;
+  loan_type: string;
+  loan_amount?: number;
+  status: string;
+  stage: string;
+  created_at?: string;
+};
 
 export default function StatusTab() {
   const [apps, setApps] = useState<Application[]>([]);
   const [selected, setSelected] = useState<Application | null>(null);
-  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const router = useRouter();
 
   useEffect(() => {
     api.get<Application[]>("/applications").then((list) => {
       setApps(list);
-      const submitted = list.find((a) => a.status === "submitted") || list[0];
-      if (submitted) setSelected(submitted);
+      if (list.length > 0) setSelected(list[0]);
     }).catch(() => {});
   }, []);
-
-  useEffect(() => {
-    if (selected) {
-      api.get<TimelineItem[]>(`/applications/${selected.application_id}/timeline`).then(setTimeline).catch(() => {});
-    }
-  }, [selected]);
 
   if (!apps.length) {
     return (
@@ -49,15 +47,13 @@ export default function StatusTab() {
     );
   }
 
-  const done = timeline.filter((t) => t.completed).length;
-  const total = timeline.length || 8;
-  const pct = Math.round((done / total) * 100);
+  const isApproved = selected?.status === "approved" || selected?.stage === "approved";
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={["top"]}>
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xxxl }} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Loan Status</Text>
-        <Text style={styles.sub}>Live updates from submission to disbursement.</Text>
+        <Text style={styles.sub}>Track your application status in real time.</Text>
 
         {apps.length > 1 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.md }}>
@@ -74,42 +70,76 @@ export default function StatusTab() {
             <View style={styles.headRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.appType}>{selected.loan_type.replace("_", " ").toUpperCase()} LOAN</Text>
-                <Text style={styles.appAmount}>{selected.loan_amount ? inrShort(selected.loan_amount) : "Draft"}</Text>
+                <Text style={styles.appAmount}>{selected.loan_amount ? inrShort(selected.loan_amount) : "Applied"}</Text>
+                <Text style={styles.appId}>ID: {selected.application_id}</Text>
               </View>
-              <View style={styles.pctWrap}>
-                <Text style={styles.pct}>{pct}%</Text>
-                <Text style={styles.pctLabel}>complete</Text>
+
+              {/* 2 Statuses Only: Approved or Processing */}
+              <View style={[styles.statusBadge, isApproved ? styles.badgeApproved : styles.badgeProcessing]}>
+                <Ionicons name={isApproved ? "checkmark-circle" : "time"} size={16} color={isApproved ? "#065F46" : "#B45309"} />
+                <Text style={[styles.statusBadgeText, isApproved ? { color: "#065F46" } : { color: "#B45309" }]}>
+                  {isApproved ? "Approved" : "Processing"}
+                </Text>
               </View>
             </View>
-            <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${pct}%` }]} /></View>
-            <View style={{ marginTop: spacing.xl }}>
-              {timeline.map((t, i) => {
-                const isLast = i === timeline.length - 1;
-                return (
-                  <View key={t.key} style={styles.stepRow}>
-                    <View style={styles.stepColLine}>
-                      <View style={[styles.dot, t.completed && styles.dotDone, t.active && styles.dotActive]}>
-                        {t.completed ? <Ionicons name="checkmark" size={12} color="#fff" /> : null}
-                      </View>
-                      {!isLast && <View style={[styles.line, t.completed && styles.lineDone]} />}
-                    </View>
-                    <View style={{ flex: 1, paddingBottom: spacing.lg }}>
-                      <Text style={[styles.stepLabel, (t.completed || t.active) && styles.stepLabelActive]}>{t.label}</Text>
-                      <Text style={styles.stepSub}>{t.completed ? "Completed" : t.active ? "In progress" : "Pending"}</Text>
-                    </View>
-                  </View>
-                );
-              })}
+
+            {/* 2-Step Status Stepper */}
+            <View style={styles.stepperWrap}>
+              <View style={styles.stepItem}>
+                <View style={[styles.stepDot, styles.stepDotDone]}>
+                  <Ionicons name="checkmark" size={14} color="#fff" />
+                </View>
+                <Text style={styles.stepTextActive}>Processing</Text>
+              </View>
+              <View style={[styles.stepLine, isApproved && styles.stepLineDone]} />
+              <View style={styles.stepItem}>
+                <View style={[styles.stepDot, isApproved ? styles.stepDotDone : styles.stepDotPending]}>
+                  {isApproved ? <Ionicons name="checkmark" size={14} color="#fff" /> : <Text style={styles.pendingDotNumber}>2</Text>}
+                </View>
+                <Text style={isApproved ? styles.stepTextActive : styles.stepTextPending}>Approved</Text>
+              </View>
             </View>
+
+            {/* Status Message Box */}
+            <View style={[styles.msgBox, isApproved ? styles.msgBoxApproved : styles.msgBoxProcessing]}>
+              <Ionicons name={isApproved ? "checkmark-circle-outline" : "hourglass-outline"} size={22} color={isApproved ? "#059669" : colors.goldDark} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.msgTitle}>{isApproved ? "Loan Application Approved 🎉" : "Application Under Processing ⏳"}</Text>
+                <Text style={styles.msgDesc}>
+                  {isApproved
+                    ? "Congratulations! Your loan application has been approved. Our team will coordinate final disbursal details."
+                    : "Your loan application information is received and is currently under processing. Our team & bank partners are verifying your application."}
+                </Text>
+              </View>
+            </View>
+
+            {/* Admin Action: Approve Application */}
+            {!isApproved ? (
+              <View style={{ marginTop: spacing.md }}>
+                <Button
+                  title="Approve Application (Admin Action)"
+                  variant="primary"
+                  testID="status-admin-approve-button"
+                  onPress={async () => {
+                    try {
+                      const updated = await api.post<Application>(`/applications/${selected.application_id}/approve`);
+                      setSelected(updated);
+                      setApps((prev) => prev.map((a) => (a.application_id === updated.application_id ? updated : a)));
+                    } catch {}
+                  }}
+                  icon={<Ionicons name="checkmark-circle" size={18} color="#fff" />}
+                />
+              </View>
+            ) : null}
           </Card>
         )}
 
         <View style={{ marginTop: spacing.lg }}>
           <Card>
             <Text style={styles.helpTitle}>Need help?</Text>
-            <Text style={styles.helpText}>Your dedicated Relationship Manager is here to assist you 7 days a week.</Text>
+            <Text style={styles.helpText}>Your dedicated Contact Person is here to assist you 7 days a week.</Text>
             <View style={{ height: spacing.md }} />
-            <Button title="Contact RM" variant="outline" testID="status-rm-button" onPress={() => router.push("/(tabs)/profile")} />
+            <Button title="Contact Us" variant="outline" testID="status-rm-button" onPress={() => router.push("/(tabs)/profile")} />
           </Card>
         </View>
       </ScrollView>
@@ -125,25 +155,32 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
   chipText: { color: colors.onSurface, fontWeight: "600", fontSize: fontSize.sm },
 
-  headRow: { flexDirection: "row", alignItems: "center" },
+  headRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
   appType: { fontSize: fontSize.xs, color: colors.onSurfaceMuted, fontWeight: "700", letterSpacing: 0.6 },
   appAmount: { fontSize: 24, fontWeight: "800", color: colors.onSurface, marginTop: 4 },
-  pctWrap: { alignItems: "flex-end" },
-  pct: { fontSize: 22, fontWeight: "800", color: colors.brandPrimary },
-  pctLabel: { fontSize: fontSize.xs, color: colors.onSurfaceMuted, fontWeight: "600" },
-  progressTrack: { height: 6, backgroundColor: colors.divider, borderRadius: radii.pill, marginTop: spacing.md, overflow: "hidden" },
-  progressFill: { height: "100%", backgroundColor: colors.brandPrimary, borderRadius: radii.pill },
+  appId: { fontSize: fontSize.xs, color: colors.onSurfaceMuted, marginTop: 2, fontWeight: "600" },
 
-  stepRow: { flexDirection: "row", gap: spacing.md },
-  stepColLine: { alignItems: "center", width: 24 },
-  dot: { width: 18, height: 18, borderRadius: 9, backgroundColor: colors.surfaceTertiary, borderWidth: 2, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  dotDone: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
-  dotActive: { borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary },
-  line: { flex: 1, width: 2, backgroundColor: colors.divider, marginVertical: 2 },
-  lineDone: { backgroundColor: colors.brandPrimary },
-  stepLabel: { fontSize: fontSize.md, color: colors.onSurfaceMuted, fontWeight: "600" },
-  stepLabelActive: { color: colors.onSurface, fontWeight: "700" },
-  stepSub: { fontSize: fontSize.xs, color: colors.onSurfaceMuted, marginTop: 2 },
+  statusBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: radii.pill },
+  badgeProcessing: { backgroundColor: "#FEF3C7", borderWidth: 1, borderColor: "#FCD34D" },
+  badgeApproved: { backgroundColor: "#D1FAE5", borderWidth: 1, borderColor: "#6EE7B7" },
+  statusBadgeText: { fontSize: fontSize.xs, fontWeight: "800", letterSpacing: 0.5 },
+
+  stepperWrap: { flexDirection: "row", alignItems: "center", marginTop: spacing.xl, marginBottom: spacing.lg, paddingHorizontal: spacing.md },
+  stepItem: { alignItems: "center", gap: 6 },
+  stepDot: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  stepDotDone: { backgroundColor: colors.brandPrimary },
+  stepDotPending: { backgroundColor: colors.surfaceTertiary, borderWidth: 2, borderColor: colors.border },
+  pendingDotNumber: { fontSize: 12, fontWeight: "700", color: colors.onSurfaceMuted },
+  stepLine: { flex: 1, height: 3, backgroundColor: colors.border, marginHorizontal: spacing.md },
+  stepLineDone: { backgroundColor: colors.brandPrimary },
+  stepTextActive: { fontSize: fontSize.xs, fontWeight: "800", color: colors.onSurface },
+  stepTextPending: { fontSize: fontSize.xs, fontWeight: "600", color: colors.onSurfaceMuted },
+
+  msgBox: { flexDirection: "row", gap: spacing.md, padding: spacing.lg, borderRadius: radii.md, marginTop: spacing.sm, borderWidth: 1 },
+  msgBoxProcessing: { backgroundColor: "#FFFBEB", borderColor: "#FDE68A" },
+  msgBoxApproved: { backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" },
+  msgTitle: { fontSize: fontSize.md, fontWeight: "800", color: colors.onSurface },
+  msgDesc: { fontSize: fontSize.sm, color: colors.onSurfaceSubtle, marginTop: 4, lineHeight: 20 },
 
   empty: { padding: spacing.xl, alignItems: "center", justifyContent: "center", flex: 1, marginTop: -50 },
   emptyIcon: { width: 88, height: 88, borderRadius: 44, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center", marginBottom: spacing.lg },

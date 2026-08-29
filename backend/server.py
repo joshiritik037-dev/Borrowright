@@ -156,7 +156,7 @@ MSG91_TEMPLATE_ID = os.environ.get("MSG91_TEMPLATE_ID", "")
 # Refer & Earn — payout = REFERRAL_PCT * disbursed_amount
 REFERRAL_PCT = float(os.environ.get("REFERRAL_PCT", "0.001"))  # 0.10%
 
-app = FastAPI(title="BorrowRight API")
+app = FastAPI(title="TrueBorrow API")
 api = APIRouter(prefix="/api")
 
 push_client = httpx.AsyncClient(
@@ -201,22 +201,9 @@ class UserPublic(BaseModel):
     created_at: datetime = Field(default_factory=now_utc)
 
 
-class OtpRequest(BaseModel):
-    mobile: str
+class StartSessionBody(BaseModel):
     name: Optional[str] = None
-    email: Optional[str] = None
-
-
-class OtpVerify(BaseModel):
     mobile: str
-    code: str
-    name: Optional[str] = None
-    email: Optional[str] = None
-    referral_code: Optional[str] = None
-
-
-class GoogleSessionBody(BaseModel):
-    session_id: str
     referral_code: Optional[str] = None
 
 
@@ -290,16 +277,10 @@ class RegisterPushBody(BaseModel):
     device_token: str
 
 
-# Status pipeline
+# Status pipeline (2 stages: processing & approved)
 STAGES = [
-    "submitted",
-    "documents_received",
-    "bank_login",
-    "legal_verification",
-    "valuation",
-    "approval",
-    "sanction_letter",
-    "disbursement",
+    "processing",
+    "approved",
 ]
 
 
@@ -342,56 +323,8 @@ async def create_session(user_id: str) -> str:
 
 
 # ---------------- OTP provider abstraction ----------------
-def _hash_otp(code: str) -> str:
-    return hashlib.sha256(code.encode()).hexdigest()
+# Removed OTP logic as per new requirements
 
-
-async def _otp_store(mobile: str, code: str, ttl_sec: int = 600) -> None:
-    await db.otp_codes.update_one(
-        {"mobile": mobile},
-        {"$set": {
-            "mobile": mobile,
-            "code_hash": _hash_otp(code),
-            "expires_at": now_utc() + timedelta(seconds=ttl_sec),
-            "attempts": 0,
-        }},
-        upsert=True,
-    )
-
-
-async def _otp_check(mobile: str, code: str) -> bool:
-    rec = await db.otp_codes.find_one({"mobile": mobile}, {"_id": 0})
-    if not rec:
-        return False
-    exp = rec.get("expires_at")
-    if isinstance(exp, datetime):
-        if exp.tzinfo is None:
-            exp = exp.replace(tzinfo=timezone.utc)
-        if exp < now_utc():
-            return False
-    if rec.get("attempts", 0) >= 5:
-        return False
-    await db.otp_codes.update_one({"mobile": mobile}, {"$inc": {"attempts": 1}})
-    return rec.get("code_hash") == _hash_otp(code)
-
-
-async def _msg91_send(mobile: str, code: str) -> None:
-    if not (MSG91_AUTH_KEY and MSG91_TEMPLATE_ID):
-        raise HTTPException(500, "MSG91 not configured")
-    mob = mobile.replace("+", "").strip()
-    payload = {
-        "template_id": MSG91_TEMPLATE_ID,
-        "sender": MSG91_SENDER_ID,
-        "mobiles": mob if mob.startswith("91") else f"91{mob}",
-        "otp": code,
-    }
-    async with httpx.AsyncClient(timeout=10.0) as cx:
-        r = await cx.post("https://control.msg91.com/api/v5/otp",
-                          json=payload,
-                          headers={"authkey": MSG91_AUTH_KEY, "content-type": "application/json"})
-    if r.status_code >= 400:
-        logger.warning(f"MSG91 send failed: {r.status_code} {r.text}")
-        raise HTTPException(502, "Could not send OTP")
 
 
 # ---------------- Referral helpers ----------------
@@ -445,32 +378,17 @@ async def _apply_referral(new_user_id: str, referral_code: Optional[str]) -> Non
 # ----------------------------- Routes -----------------------------
 @api.get("/")
 async def root():
-    return {"message": "BorrowRight API", "status": "ok"}
+    return {"message": "TrueBorrow API", "status": "ok"}
 
 
-@api.post("/auth/otp/request")
-async def otp_request(body: OtpRequest):
+@api.post("/auth/start")
+async def start_session(body: StartSessionBody):
     mobile = body.mobile.strip()
-    if OTP_PROVIDER == "msg91":
-        code = f"{secrets.randbelow(900000) + 100000}"
-        await _otp_store(mobile, code)
-        await _msg91_send(mobile, code)
-        return {"status": "sent", "mobile": mobile, "provider": "msg91"}
-    # dev provider — accept any 6-digit code at verify
-    return {"status": "sent", "mobile": mobile, "provider": "dev", "dev_hint": "Enter any 6-digit code"}
+    name = (body.name or "").strip()
+    if not mobile:
+        raise HTTPException(400, "Mobile number is required")
 
-
-@api.post("/auth/otp/verify")
-async def otp_verify(body: OtpVerify):
-    if not body.code or len(body.code) != 6 or not body.code.isdigit():
-        raise HTTPException(400, "Enter a 6-digit code")
-    mobile = body.mobile.strip()
-    if OTP_PROVIDER == "msg91":
-        ok = await _otp_check(mobile, body.code)
-        if not ok:
-            raise HTTPException(401, "Invalid or expired OTP")
-        await db.otp_codes.delete_one({"mobile": mobile})
-    # else: dev provider — any 6-digit accepted
+    # Find existing user by mobile
     user = await db.users.find_one({"mobile": mobile}, {"_id": 0})
     is_new = False
     if not user:
@@ -479,74 +397,21 @@ async def otp_verify(body: OtpVerify):
         user = {
             "user_id": user_id,
             "mobile": mobile,
-            "email": body.email,
-            "name": body.name,
+            "name": name or "User",
             "onboarded": False,
             "created_at": now_utc(),
         }
         await db.users.insert_one(dict(user))
-        user.pop("_id", None)
         await _ensure_referral_code(user)
         await _apply_referral(user_id, body.referral_code)
-    token = await create_session(user["user_id"])
-    fresh = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
-    return {"session_token": token, "user": _clean(fresh), "is_new": is_new}
-
-
-@api.post("/auth/google/session")
-async def google_session(body: GoogleSessionBody):
-    token = body.session_id
-    if token.startswith("mock_"):
-        data = {
-            "email": "testuser@gmail.com",
-            "name": "Test User",
-            "picture": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
-        }
-    elif token.startswith("ya29.") or len(token) > 40:
-        # Direct Google OAuth2 Token Verification
-        async with httpx.AsyncClient(timeout=10.0) as cx:
-            r = await cx.get(
-                "https://www.googleapis.com/oauth2/v3/userinfo",
-                headers={"Authorization": f"Bearer {token}"}
-            )
-        if r.status_code != 200:
-            # Fallback to legacy Emergent session (in case of uuid session token)
-            async with httpx.AsyncClient(timeout=10.0) as cx:
-                r2 = await cx.get(EMERGENT_SESSION_URL, headers={"X-Session-ID": token})
-            if r2.status_code != 200:
-                raise HTTPException(401, "Invalid Google token or session ID")
-            data = r2.json()
-        else:
-            data = r.json()
     else:
-        # Legacy/Emergent session flow
-        async with httpx.AsyncClient(timeout=10.0) as cx:
-            r = await cx.get(EMERGENT_SESSION_URL, headers={"X-Session-ID": token})
-        if r.status_code != 200:
-            raise HTTPException(401, "Invalid session id")
-        data = r.json()
-    email = data.get("email")
-    if not email:
-        raise HTTPException(400, "Missing email from Google")
-    user = await db.users.find_one({"email": email}, {"_id": 0})
-    is_new = False
-    if not user:
-        is_new = True
-        user_id = new_id("usr")
-        user = {
-            "user_id": user_id,
-            "email": email,
-            "name": data.get("name"),
-            "picture": data.get("picture"),
-            "onboarded": False,
-            "created_at": now_utc(),
-        }
-        await db.users.insert_one(dict(user))
-        await _ensure_referral_code(user)
-        await _apply_referral(user_id, body.referral_code)
-    token = await create_session(user["user_id"])
-    user_clean = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
-    return {"session_token": token, "user": _clean(user_clean), "is_new": is_new}
+        user_id = user["user_id"]
+        if name and name != "User" and user.get("name") != name:
+            await db.users.update_one({"user_id": user_id}, {"$set": {"name": name}})
+    
+    token = await create_session(user_id)
+    fresh = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    return {"session_token": token, "user": _clean(fresh), "is_new": is_new}
 
 
 @api.get("/auth/me")
@@ -583,8 +448,6 @@ async def loan_types():
         {"id": "car", "name": "Car Loan", "icon": "car", "desc": "Drive home your dream car"},
         {"id": "personal", "name": "Personal Loan", "icon": "wallet", "desc": "Quick funds for any need"},
         {"id": "business", "name": "Business Loan", "icon": "briefcase", "desc": "Grow and scale your business"},
-        {"id": "construction", "name": "Construction Loan", "icon": "hammer", "desc": "Build your dream property"},
-        {"id": "working_capital", "name": "Working Capital", "icon": "chart-line", "desc": "Smooth cash flow for ops"},
         {"id": "other", "name": "Others", "icon": "ellipsis-horizontal", "desc": "Custom loan needs"},
     ]
 
@@ -620,12 +483,10 @@ async def banks_list(loan_type: Optional[str] = None, amount: Optional[float] = 
 @api.get("/faqs")
 async def faqs():
     return [
-        {"q": "How is BorrowRight different from a broker?", "a": "We are an independent advisory — zero cash, fully documented, and we work for you, not the bank."},
-        {"q": "What is the 15% cash refund?", "a": "We commit to returning at least 15% of the total cost involved in your loan, making your borrowing more rewarding."},
-        {"q": "How long does loan approval take?", "a": "Sanction and disbursement typically complete in 10 working days for ready cases."},
+        {"q": "How is TrueBorrow different from a broker?", "a": "We are an independent advisory — zero cash, fully documented, and we work for you, not the bank."},
+        {"q": "What is the 15% cash refund?", "a": "We commit to returning at least 15% of the processing fees involved in your loan, making your borrowing more rewarding."},
         {"q": "Is my data safe?", "a": "Yes — all documents are encrypted and stored in secure cloud. Access is role-based and audited."},
-        {"q": "Do I need to visit any office?", "a": "No physical visit required. You can also share documents over WhatsApp with your dedicated Relationship Manager."},
-        {"q": "Can I track my application status?", "a": "Yes — track all 8 stages live from your dashboard, from submission to disbursement."},
+        {"q": "Do I need to visit any office?", "a": "No physical visit required. You can also share documents over WhatsApp with your dedicated Contact Person."},
     ]
 
 
@@ -643,7 +504,6 @@ async def promise():
         ],
         "solutions": [
             "Transparent Loan Advisory",
-            "Compare Banks",
             "Ethical Process",
             "Lower Total Cost",
             "Complete Documentation Support",
@@ -669,9 +529,9 @@ async def create_application(body: ApplicationCreate, authorization: Optional[st
         "application_id": app_id,
         "user_id": user["user_id"],
         **body.model_dump(),
-        "status": "draft",
-        "stage": "submitted",
-        "stages_completed": [],
+        "status": "processing",
+        "stage": "processing",
+        "stages_completed": ["processing"],
         "rm": _default_rm(),
         "created_at": now_utc(),
         "updated_at": now_utc(),
@@ -750,9 +610,9 @@ async def submit_application(app_id: str, authorization: Optional[str] = Header(
     await db.applications.update_one(
         {"application_id": app_id},
         {"$set": {
-            "status": "submitted",
-            "stage": "submitted",
-            "stages_completed": ["submitted"],
+            "status": "processing",
+            "stage": "processing",
+            "stages_completed": ["processing"],
             "submitted_at": now_utc(),
             "updated_at": now_utc(),
         }},
@@ -851,9 +711,9 @@ async def mark_disbursed(app_id: str, body: MarkDisbursedBody, authorization: Op
     await db.applications.update_one(
         {"application_id": app_id},
         {"$set": {
-            "status": "disbursed",
-            "stage": "disbursement",
-            "stages_completed": all_stages,
+            "status": "approved",
+            "stage": "approved",
+            "stages_completed": ["processing", "approved"],
             "disbursed_amount": disbursed,
             "disbursed_at": now_utc(),
             "updated_at": now_utc(),
@@ -887,6 +747,44 @@ async def mark_disbursed(app_id: str, body: MarkDisbursedBody, authorization: Op
             )
         except Exception as e:
             logger.warning(f"reward push failed: {e}")
+    fresh = await db.applications.find_one({"application_id": app_id}, {"_id": 0})
+    return _clean(fresh)
+
+
+@api.post("/applications/{app_id}/approve")
+async def approve_application(app_id: str, authorization: Optional[str] = Header(default=None)):
+    user = await current_user(authorization)
+    app_doc = await db.applications.find_one({"application_id": app_id}, {"_id": 0})
+    if not app_doc:
+        raise HTTPException(404, "Application not found")
+    amount = float(app_doc.get("loan_amount") or 500000)
+    await db.applications.update_one(
+        {"application_id": app_id},
+        {"$set": {
+            "status": "approved",
+            "stage": "approved",
+            "stages_completed": ["processing", "approved"],
+            "approved_at": now_utc(),
+            "updated_at": now_utc(),
+        }},
+    )
+    # Award referral
+    try:
+        ref = await db.referrals.find_one({"referred_user_id": app_doc["user_id"]}, {"_id": 0})
+        if ref and ref.get("status") != "disbursed":
+            reward = round(amount * REFERRAL_PCT)
+            await db.referrals.update_one(
+                {"referral_id": ref["referral_id"]},
+                {"$set": {
+                    "status": "disbursed",
+                    "reward_amount": reward,
+                    "disbursed_amount": amount,
+                    "disbursed_application_id": app_id,
+                    "updated_at": now_utc(),
+                }},
+            )
+    except Exception as e:
+        logger.warning(f"referral award failed: {e}")
     fresh = await db.applications.find_one({"application_id": app_id}, {"_id": 0})
     return _clean(fresh)
 
@@ -940,13 +838,37 @@ async def send_push(recipients: List[str], data: Dict[str, Any], idempotency_key
 # ---------------- Helpers ----------------
 def _default_rm() -> Dict[str, Any]:
     return {
-        "name": "Priya Sharma",
-        "title": "Senior Relationship Manager",
+        "name": "Ritik Joshi",
+        "title": "Contact Person",
         "phone": "+919826739349",
         "whatsapp": "+919826739349",
-        "email": "priya@splendidconsultants.in",
-        "photo": "https://images.unsplash.com/photo-1580489944761-15a19d654956?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwxfHxwcmVtaXVtJTIwcHJvZmVzc2lvbmFsJTIwYnVzaW5lc3MlMjB3b21hbiUyMGhlYWRzaG90JTIwc21pbGluZyUyMGNsZWFyJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3ODI1NzcxMTF8MA&ixlib=rb-4.1.0&q=85",
+        "email": "ritik@splendidconsultants.in",
     }
+
+
+def _default_rms() -> List[Dict[str, Any]]:
+    return [
+        {
+            "name": "Ritik Joshi",
+            "title": "Contact Person",
+            "phone": "+919826739349",
+            "whatsapp": "+919826739349",
+            "email": "ritik@splendidconsultants.in",
+        },
+        {
+            "name": "Koushiki Khandelwal",
+            "title": "Contact Person",
+            "phone": "+919301931777",
+            "whatsapp": "+919301931777",
+            "email": "koushiki@splendidconsultants.in",
+        },
+    ]
+
+
+@api.get("/rms")
+async def get_rms():
+    return _default_rms()
+
 
 
 def _clean(d: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -972,7 +894,7 @@ def _mask_mobile(m: Optional[str]) -> Optional[str]:
 def _share_text(name: Optional[str], code: str) -> str:
     n = (name or "I").strip().split(" ")[0]
     return (
-        f"Hi! I'm using BorrowRight by Splendid Consultants to get loans at the lowest possible cost — "
+        f"Hi! I'm using TrueBorrow by Splendid Consultants to get loans at the lowest possible cost — "
         f"transparent, no brokers, no hidden charges. Use my code *{code}* to get a dedicated RM and "
         f"share in the savings (min 15% cash refund). Download now."
     )

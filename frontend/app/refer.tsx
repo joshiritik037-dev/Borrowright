@@ -80,7 +80,7 @@ export default function Refer() {
           <View style={styles.heroInner}>
             <View style={styles.badge}><Ionicons name="gift" size={12} color={colors.warning} /><Text style={styles.badgeText}>REFER & EARN</Text></View>
             <Text style={styles.heroTitle}>Earn 0.10% of every disbursed loan</Text>
-            <Text style={styles.heroSub}>Share BorrowRight with friends. Get paid when their loan gets disbursed. Uncapped.</Text>
+            <Text style={styles.heroSub}>Share TrueBorrow with friends. Get paid when their loan gets disbursed. Uncapped.</Text>
 
             <View style={styles.codeRow}>
               <View style={styles.codeBox}>
@@ -124,7 +124,7 @@ export default function Refer() {
               {[
                 { i: "share-social", t: "Share your code", d: "Send it to friends planning to take a loan" },
                 { i: "person-add", t: "They sign up", d: "Using your code → instant tracked invite" },
-                { i: "document-text", t: "They apply for a loan", d: "Submit application via BorrowRight" },
+                { i: "document-text", t: "They apply for a loan", d: "Submit application via TrueBorrow" },
                 { i: "cash", t: "You earn 0.10% on disbursal", d: "Reward credited the day their loan is disbursed" },
               ].map((s, i) => (
                 <View key={i} style={styles.stepRow}>

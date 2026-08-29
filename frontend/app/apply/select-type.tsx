@@ -7,7 +7,7 @@ import { colors, fontSize, radii, spacing } from "@/src/theme";
 import { api } from "@/src/lib/api";
 
 type LoanType = { id: string; name: string; icon: string; desc: string };
-const ICONS: Record<string, any> = { home: "home", lap: "business", car: "car-sport", personal: "wallet", business: "briefcase", construction: "construct", working_capital: "trending-up", other: "ellipsis-horizontal-circle" };
+const ICONS: Record<string, any> = { home: "home", lap: "business", car: "car-sport", personal: "wallet", business: "briefcase", other: "ellipsis-horizontal-circle" };
 
 export default function SelectType() {
   const [types, setTypes] = useState<LoanType[]>([]);

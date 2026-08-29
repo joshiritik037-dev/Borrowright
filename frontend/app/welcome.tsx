@@ -8,7 +8,7 @@ import { Button } from "@/src/components/Button";
 import { colors, fontSize, radii, spacing } from "@/src/theme";
 
 const FEATURES = [
-  { icon: "git-compare-outline", title: "Compare Banks", desc: "Side-by-side rates" },
+  { icon: "shield-checkmark-outline", title: "Transparent Advisory", desc: "Zero cash policy" },
   { icon: "trending-down-outline", title: "Lower Loan Cost", desc: "Up to 1.25% savings" },
   { icon: "flash-outline", title: "Faster Processing", desc: "10 day disbursal" },
   { icon: "person-outline", title: "Dedicated RM", desc: "One expert. End-to-end." },
@@ -54,7 +54,7 @@ export default function Welcome() {
 
             <View style={styles.refundBanner}>
               <Ionicons name="gift" size={18} color={colors.warning} />
-              <Text style={styles.refundText}>Minimum <Text style={{ color: colors.warning, fontWeight: "800" }}>15% Cash Refund</Text> on total loan cost</Text>
+              <Text style={styles.refundText}>Minimum <Text style={{ color: colors.warning, fontWeight: "800" }}>15% Cash Refund</Text> on processing fees</Text>
             </View>
           </ScrollView>
 
